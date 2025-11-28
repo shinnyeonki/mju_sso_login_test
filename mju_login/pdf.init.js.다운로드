@@ -1,1 +1,0 @@
-if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='/custom/pdf/js/pdf.worker.min.js';}
