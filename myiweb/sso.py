@@ -1,20 +1,6 @@
-"""
-SSO 로그인 모듈
-===============
-명지대학교 SSO 인증 처리
-
-작동 원리:
-1. GET 요청으로 로그인 페이지 접속 → 공개키, CSRF 토큰, 세션 쿠키 획득
-2. 클라이언트에서 세션키 생성 후 RSA로 암호화 (키 교환)
-3. 비밀번호를 세션키로 AES 암호화
-4. POST 요청으로 암호화된 데이터 전송
-5. 성공 시 리다이렉트 URL로 이동
-"""
-
 import re
 import time
 from typing import Optional
-from dataclasses import dataclass
 
 import requests
 from bs4 import BeautifulSoup, SoupStrainer
@@ -24,16 +10,12 @@ from .utils import (
     log_warning, log_request, log_response, mask_sensitive
 )
 from .crypto import generate_session_key, encrypt_with_rsa, encrypt_with_aes
-
-
-@dataclass
-class LoginResult:
-    """로그인 결과"""
-    success: bool
-    message: str
-    cookies: dict = None
-    final_url: str = None
-    session: requests.Session = None
+from .exceptions import (
+    MyIWebError,
+    NetworkError,
+    PageParsingError,
+    InvalidCredentialsError
+)
 
 
 class MJUSSOLogin:
@@ -99,23 +81,23 @@ class MJUSSOLogin:
         self.csrf_token: Optional[str] = None
         self.form_action: Optional[str] = None
         
-    def _parse_login_page(self, html: str) -> bool:
+    def _parse_login_page(self, html: str):
         """로그인 페이지에서 필요한 정보 추출"""
         if self.verbose:
             log_step("1-2", "로그인 페이지 파싱")
         
         # 정규표현식으로 먼저 빠르게 추출 시도
-        public_key_match = re.search(r'id=["\']public-key["\'][^>]*value=["\']([^"\']+)["\']', html)
+        public_key_match = re.search(r'id=["\"]public-key["\"][^>]*value=["\"]([^"\"]+)["\"]', html)
         if not public_key_match:
-            public_key_match = re.search(r'value=["\']([^"\']+)["\'][^>]*id=["\']public-key["\']', html)
+            public_key_match = re.search(r'value=["\"]([^"\"]+)["\"][^>]*id=["\"]public-key["\"]', html)
         
-        csrf_match = re.search(r'id=["\']c_r_t["\'][^>]*value=["\']([^"\']+)["\']', html)
+        csrf_match = re.search(r'id=["\"]c_r_t["\"][^>]*value=["\"]([^"\"]+)["\"]', html)
         if not csrf_match:
-            csrf_match = re.search(r'value=["\']([^"\']+)["\'][^>]*id=["\']c_r_t["\']', html)
+            csrf_match = re.search(r'value=["\"]([^"\"]+)["\"][^>]*id=["\"]c_r_t["\"]', html)
         
-        form_action_match = re.search(r'<form[^>]*id=["\']signin-form["\'][^>]*action=["\']([^"\']+)["\']', html)
+        form_action_match = re.search(r'<form[^>]*id=["\"]signin-form["\"][^>]*action=["\"]([^"\"]+)["\"]', html)
         if not form_action_match:
-            form_action_match = re.search(r'<form[^>]*action=["\']([^"\']+)["\'][^>]*id=["\']signin-form["\']', html)
+            form_action_match = re.search(r'<form[^>]*action=["\"]([^"\"]+)["\"][^>]*id=["\"]signin-form["\"]', html)
         
         # 정규표현식으로 모두 찾은 경우 BeautifulSoup 스킵
         if public_key_match and csrf_match and form_action_match:
@@ -128,8 +110,8 @@ class MJUSSOLogin:
                 log_info("CSRF Token", self.csrf_token)
                 log_info("Form Action", self.form_action)
                 log_success("페이지 파싱 완료 (regex)")
-            return True
-        
+            return
+
         # 정규표현식 실패 시 lxml + SoupStrainer로 폴백
         parse_only = SoupStrainer(['input', 'form'])
         soup = BeautifulSoup(html, 'lxml', parse_only=parse_only)
@@ -137,8 +119,7 @@ class MJUSSOLogin:
         # 1. 공개키 추출
         public_key_input = soup.find('input', {'id': 'public-key'})
         if not public_key_input:
-            log_error("공개키(public-key)를 찾을 수 없습니다.")
-            return False
+            raise PageParsingError("공개키(public-key)를 찾을 수 없습니다.")
         self.public_key = public_key_input.get('value')
         
         if self.verbose:
@@ -147,8 +128,7 @@ class MJUSSOLogin:
         # 2. CSRF 토큰 추출
         csrf_input = soup.find('input', {'id': 'c_r_t'})
         if not csrf_input:
-            log_error("CSRF 토큰(c_r_t)을 찾을 수 없습니다.")
-            return False
+            raise PageParsingError("CSRF 토큰(c_r_t)을 찾을 수 없습니다.")
         self.csrf_token = csrf_input.get('value')
         
         if self.verbose:
@@ -157,16 +137,13 @@ class MJUSSOLogin:
         # 3. Form Action URL 추출
         form = soup.find('form', {'id': 'signin-form'})
         if not form:
-            log_error("로그인 폼(signin-form)을 찾을 수 없습니다.")
-            return False
+            raise PageParsingError("로그인 폼(signin-form)을 찾을 수 없습니다.")
         self.form_action = form.get('action')
         
         if self.verbose:
             log_info("Form Action", self.form_action)
             log_success("페이지 파싱 완료")
-        
-        return True
-    
+
     def _handle_js_form_submit(self, response: requests.Response, step: int) -> Optional[requests.Response]:
         """
         JavaScript 자동 폼 제출 처리
@@ -191,7 +168,7 @@ class MJUSSOLogin:
             return None
         
         # 정규표현식으로 빠르게 폼 데이터 추출 시도
-        form_action_match = re.search(r'<form[^>]*action=["\']([^"\']+)["\']', html)
+        form_action_match = re.search(r'<form[^>]*action=["\"]([^"\"]+)["\"]', html)
         if not form_action_match:
             return None
         
@@ -200,7 +177,7 @@ class MJUSSOLogin:
             return None
         
         # hidden input들 추출
-        input_pattern = re.compile(r'<input[^>]*name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']|<input[^>]*value=["\']([^"\']*)["\'][^>]*name=["\']([^"\']+)["\']')
+        input_pattern = re.compile(r'<input[^>]*name=["\"]([^"\"]+)["\"][^>]*value=["\"]([^"\"]*)["\"]|<input[^>]*value=["\"]([^"\"]*)["\"][^>]*name=["\"]([^"\"]+)["\"]')
         form_data = {}
         for match in input_pattern.finditer(html):
             if match.group(1):
@@ -276,7 +253,7 @@ class MJUSSOLogin:
             'user_id_enc': '',
         }
     
-    def login(self, service: str = 'msi') -> LoginResult:
+    def login(self, service: str = 'msi') -> requests.Session:
         """
         SSO 로그인 수행
         
@@ -284,10 +261,16 @@ class MJUSSOLogin:
             service: 로그인할 서비스 ('lms', 'portal', 'library', 'msi', 'myicap')
         
         Returns:
-            LoginResult: 로그인 결과
+            requests.Session: 로그인된 세션 객체
+        
+        Raises:
+            InvalidCredentialsError: 로그인 정보가 틀렸을 때
+            PageParsingError: 로그인 페이지 파싱에 실패했을 때
+            NetworkError: 네트워크 요청에 실패했을 때
+            MyIWebError: 그 외 알 수 없는 에러
         """
         if service not in self.SERVICES:
-            return LoginResult(success=False, message=f'Unknown service: {service}')
+            raise MyIWebError(f'Unknown service: {service}')
         
         service_info = self.SERVICES[service]
         
@@ -309,12 +292,10 @@ class MJUSSOLogin:
             if self.verbose:
                 log_response(response)
         except requests.RequestException as e:
-            log_error(f"페이지 접속 실패: {e}")
-            return LoginResult(success=False, message=str(e))
+            raise NetworkError(f"페이지 접속 실패: {e}") from e
         
         # 페이지 파싱
-        if not self._parse_login_page(response.text):
-            return LoginResult(success=False, message='로그인 페이지 파싱 실패')
+        self._parse_login_page(response.text)
         
         # Step 2: 암호화 데이터 준비
         encrypted_data = self._prepare_encrypted_data()
@@ -360,7 +341,7 @@ class MJUSSOLogin:
                     continue
                 
                 # location.href 리다이렉트 처리
-                js_redirect_match = re.search(r"location\.href\s*=\s*['\"]([^'\"]+)['\"]", response.text)
+                js_redirect_match = re.search(r"location\.href\s*=\s*['\"](.*?)['\"]", response.text)
                 if js_redirect_match:
                     redirect_url = js_redirect_match.group(1)
                     if redirect_url.startswith('http'):
@@ -376,8 +357,7 @@ class MJUSSOLogin:
                 break
                         
         except requests.RequestException as e:
-            log_error(f"로그인 요청 실패: {e}")
-            return LoginResult(success=False, message=str(e))
+            raise NetworkError(f"로그인 요청 실패: {e}") from e
         
         # Step 4: 결과 확인
         if self.verbose:
@@ -399,7 +379,9 @@ class MJUSSOLogin:
         
         # alert() 패턴도 확인
         if not error_msg:
-            alert_match = re.search(r"alert\(['\"](.+?)['\"]\)", response.text)
+            alert_match = re.search(r"alert\('(.+?)'\)", response.text)
+            if not alert_match:
+                alert_match = re.search(r'alert\("(.+?)"\)', response.text)
             if alert_match:
                 error_msg = alert_match.group(1)
                 try:
@@ -425,52 +407,27 @@ class MJUSSOLogin:
             if self.verbose:
                 log_success(f"로그인 성공! ({service_info['name']})")
             
-            # 쿠키를 안전하게 dict로 변환 (중복 쿠키 처리)
-            cookies = {}
-            for cookie in self.session.cookies:
-                cookies[f"{cookie.name}@{cookie.domain}"] = cookie.value
-            
-            return LoginResult(
-                success=True,
-                message='로그인 성공',
-                cookies=cookies,
-                final_url=final_url,
-                session=self.session
-            )
+            return self.session
         
         # 에러 메시지가 있으면 실패
         if error_msg:
             if self.verbose:
                 log_error("로그인 실패")
                 log_info("Server Error", error_msg, 4)
-            
-            return LoginResult(
-                success=False,
-                message=error_msg,
-                final_url=final_url
-            )
+            raise InvalidCredentialsError(error_msg)
         
         # 폼이 다시 나타났으면 실패
         if has_signin_form:
             if self.verbose:
                 log_error("로그인 실패")
                 log_info("원인", "로그인 폼이 다시 표시됨 (인증 실패)", 4)
-            
-            return LoginResult(
-                success=False,
-                message='인증 실패 (로그인 정보를 확인해주세요)',
-                final_url=final_url
-            )
+            raise InvalidCredentialsError('인증 실패 (로그인 정보를 확인해주세요)')
         
         # 알 수 없는 상태
         if self.verbose:
             log_warning("로그인 결과 불확실")
         
-        return LoginResult(
-            success=False,
-            message='알 수 없는 오류',
-            final_url=final_url
-        )
+        raise MyIWebError('알 수 없는 오류가 발생했습니다.')
     
     def test_session(self, service: str = 'msi') -> bool:
         """세션 유효성 테스트"""

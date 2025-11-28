@@ -22,6 +22,12 @@ from .utils import (
     Colors, log_section, log_step, log_info, log_success, log_error, 
     log_warning, log_request, log_response
 )
+from .exceptions import (
+    NetworkError,
+    PageParsingError,
+    SessionExpiredError,
+    InvalidCredentialsError
+)
 
 
 @dataclass
@@ -94,7 +100,7 @@ class StudentInfo:
         """학생 정보 요약 출력"""
         print(f"\n{Colors.HEADER}{'='*60}")
         print(f" 학생 정보 조회 결과")
-        print(f"{'='*60}{Colors.END}")
+        print(f"{Colors.HEADER}{'='*60}{Colors.END}")
         
         print(f"\n{Colors.BOLD}[기본 정보]{Colors.END}")
         log_info("학번", self.student_id)
@@ -153,7 +159,7 @@ class StudentCardFetcher:
             return csrf_match.group(1)
         
         # X-CSRF-TOKEN 헤더 설정에서 추출
-        csrf_match = re.search(r"X-CSRF-TOKEN['\"]?\s*:\s*['\"]([^'\"]+)['\"]", html)
+        csrf_match = re.search(r'X-CSRF-TOKEN[\'"]?\s*:\s*[\'"]([^"\']+)[\'"]', html)
         if csrf_match:
             return csrf_match.group(1)
         
@@ -164,7 +170,7 @@ class StudentCardFetcher:
         
         return None
     
-    def _get_csrf_token(self) -> bool:
+    def _get_csrf_token(self):
         """MSI 홈페이지에서 CSRF 토큰 추출"""
         if self.verbose:
             log_step("1", "CSRF 토큰 추출")
@@ -178,26 +184,21 @@ class StudentCardFetcher:
             
             # SSO로 리다이렉트되면 세션 만료
             if 'sso.mju.ac.kr' in response.url:
-                log_error("세션이 만료되었습니다. 다시 로그인해주세요.")
-                return False
+                raise SessionExpiredError("세션이 만료되었습니다. 다시 로그인해주세요.")
             
             self.csrf_token = self._extract_csrf_from_html(response.text)
             
             if not self.csrf_token:
-                log_error("CSRF 토큰을 찾을 수 없습니다.")
-                return False
+                raise PageParsingError("CSRF 토큰을 찾을 수 없습니다.")
             
             if self.verbose:
                 log_info("CSRF Token", self.csrf_token)
                 log_success("CSRF 토큰 추출 완료")
             
-            return True
-            
         except requests.RequestException as e:
-            log_error(f"CSRF 토큰 추출 실패: {e}")
-            return False
+            raise NetworkError(f"CSRF 토큰 추출 실패: {e}") from e
     
-    def _access_student_card_page(self) -> Optional[str]:
+    def _access_student_card_page(self) -> str:
         """sideform 방식으로 학생카드 페이지 접근"""
         if self.verbose:
             log_step("2", "학생카드 페이지 접근 (sideform 방식)")
@@ -237,14 +238,13 @@ class StudentCardFetcher:
             return response.text
             
         except requests.RequestException as e:
-            log_error(f"학생카드 페이지 접근 실패: {e}")
-            return None
+            raise NetworkError(f"학생카드 페이지 접근 실패: {e}") from e
     
     def _check_password_required(self, html: str) -> bool:
         """비밀번호 입력이 필요한지 확인"""
         return 'tfpassword' in html or 'verifyPW' in html
     
-    def _submit_password(self, html: str) -> Optional[str]:
+    def _submit_password(self, html: str) -> str:
         """
         비밀번호 제출 - 평문으로 전송
         
@@ -295,10 +295,9 @@ class StudentCardFetcher:
             return response.text
             
         except requests.RequestException as e:
-            log_error(f"비밀번호 인증 실패: {e}")
-            return None
+            raise NetworkError(f"비밀번호 인증 실패: {e}") from e
     
-    def _handle_redirect_form(self, html: str) -> Optional[str]:
+    def _handle_redirect_form(self, html: str) -> str:
         """
         JavaScript 리다이렉트 폼 처리
         
@@ -318,13 +317,13 @@ class StudentCardFetcher:
             log_step("4", "리다이렉트 폼 처리")
         
         # 정규표현식으로 빠르게 추출 시도
-        action_match = re.search(r'frm\.action\s*=\s*["\']([^"\']+)["\']', html)
+        action_match = re.search(r'frm\.action\s*=\s*["\']([^"\\]+)["\']', html)
         if not action_match:
-            action_match = re.search(r'<form[^>]*action=["\']([^"\']+)["\']', html)
+            action_match = re.search(r'<form[^>]*action=["\']([^"\\]+)["\']', html)
         
-        csrf_match = re.search(r'name=["\']_csrf["\'][^>]*value=["\']([^"\']+)["\']', html)
+        csrf_match = re.search(r'name=["\']_csrf["\'][^>]*value=["\']([^"\\]+)["\']', html)
         if not csrf_match:
-            csrf_match = re.search(r'value=["\']([^"\']+)["\'][^>]*name=["\']_csrf["\']', html)
+            csrf_match = re.search(r'value=["\']([^"\\]+)["\'][^>]*name=["\']_csrf["\']', html)
         
         action = action_match.group(1) if action_match else ''
         
@@ -342,7 +341,7 @@ class StudentCardFetcher:
             if form:
                 if not action:
                     action = form.get('action', '')
-                    action_js = re.search(r'frm\.action\s*=\s*["\']([^"\']+)["\']', html)
+                    action_js = re.search(r'frm\.action\s*=\s*["\']([^"\\]+)["\']', html)
                     if action_js:
                         action = action_js.group(1)
                 if not csrf_match:
@@ -378,10 +377,9 @@ class StudentCardFetcher:
             return response.text
             
         except requests.RequestException as e:
-            log_error(f"리다이렉트 폼 처리 실패: {e}")
-            return None
+            raise NetworkError(f"리다이렉트 폼 처리 실패: {e}") from e
     
-    def _parse_student_info(self, html: str) -> Optional[StudentInfo]:
+    def _parse_student_info(self, html: str) -> StudentInfo:
         """학생 정보 HTML 파싱"""
         if self.verbose:
             log_step("5", "학생 정보 파싱")
@@ -494,27 +492,23 @@ class StudentCardFetcher:
         
         # 필수 정보 확인
         if not info.student_id:
-            log_error("학생 정보를 찾을 수 없습니다.")
-            return None
+            raise PageParsingError("학생 정보를 찾을 수 없습니다 (학번 필드 누락).")
         
         if self.verbose:
             log_success("학생 정보 파싱 완료")
         
         return info
     
-    def fetch(self) -> Optional[StudentInfo]:
+    def fetch(self) -> StudentInfo:
         """학생카드 정보 조회"""
         if self.verbose:
             log_section("학생카드 정보 조회")
         
         # Step 1: CSRF 토큰 추출
-        if not self._get_csrf_token():
-            return None
+        self._get_csrf_token()
         
         # Step 2: 학생카드 페이지 접근 (sideform 방식)
         html = self._access_student_card_page()
-        if not html:
-            return None
         
         # Step 3: 비밀번호 인증 필요 여부 확인
         if self._check_password_required(html):
@@ -523,18 +517,13 @@ class StudentCardFetcher:
             
             # 비밀번호 제출
             html = self._submit_password(html)
-            if not html:
-                return None
             
             # Step 4: 리다이렉트 폼 처리
             html = self._handle_redirect_form(html)
-            if not html:
-                return None
             
             # 여전히 비밀번호 인증 필요하면 실패
             if self._check_password_required(html):
-                log_error("비밀번호 인증에 실패했습니다.")
-                return None
+                raise InvalidCredentialsError("2차 비밀번호 인증에 실패했습니다.")
         
         # Step 5: 학생 정보 파싱
         info = self._parse_student_info(html)
