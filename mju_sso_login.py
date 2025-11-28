@@ -27,7 +27,8 @@ from dotenv import load_dotenv
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5, AES
 from Crypto.Util.Padding import pad
-from Crypto.Hash import SHA256
+from Crypto.Protocol.KDF import PBKDF2
+from Crypto.Hash import SHA1
 
 # ========================================
 # 로깅 유틸리티
@@ -92,15 +93,35 @@ def log_request(method, url, headers=None, data=None):
         safe_data = {k: ('****' if 'pw' in k.lower() and v else v) for k, v in data.items()}
         log_info("Form Data", safe_data)
 
-def log_response(response):
+def log_response(response, show_body=True, max_body_length=5000):
     """HTTP 응답 로깅"""
     print(f"\n{Colors.YELLOW}<<< Response <<<{Colors.END}")
     log_info("Status Code", response.status_code)
     log_info("Final URL", response.url)
+    
+    # 전체 응답 헤더 출력
+    print(f"\n  {Colors.CYAN}[Response Headers]{Colors.END}")
+    for header_name, header_value in response.headers.items():
+        log_info(header_name, header_value, 4)
+    
+    # 쿠키 출력
     if response.cookies:
-        log_info("Cookies", dict(response.cookies))
-    if 'Location' in response.headers:
-        log_info("Redirect To", response.headers['Location'])
+        print(f"\n  {Colors.CYAN}[Response Cookies]{Colors.END}")
+        log_info("Cookies", dict(response.cookies), 4)
+    
+    # 응답 본문 출력
+    if show_body:
+        print(f"\n  {Colors.CYAN}[Response Body]{Colors.END}")
+        body = response.text
+        if len(body) > max_body_length:
+            print(f"    (총 {len(body)} chars, 처음 {max_body_length}자만 표시)")
+            print(f"    {'-'*60}")
+            print(body[:max_body_length])
+            print(f"    ... (생략됨)")
+        else:
+            print(f"    {'-'*60}")
+            print(body)
+        print(f"    {'-'*60}")
 
 
 # ========================================
@@ -111,14 +132,46 @@ def generate_session_key(length=32):
     """
     세션키 생성 (JavaScript bandiJS.genKey 대응)
     
-    원리:
-    - JavaScript에서는 forge.random.getBytesSync(64)로 랜덤 바이트 생성 후 Base64 인코딩
-    - 실제로는 keyStr만 서버로 전송되므로 간단한 랜덤 문자열로 대체 가능
+    JavaScript 원본:
+    ```javascript
+    genKey: function(length) {
+        var keyStr = forge.util.encode64(forge.random.getBytesSync(64));
+        var salt = keyStr.substring(keyStr.length - 16);
+        var keyBytes = forge.pkcs5.pbkdf2(keyStr, salt, 1024, length);
+        var ivBytes = keyBytes.slice(keyBytes.length - 16);
+        return { length, key: keyBytes, iv: ivBytes, keyStr };
+    }
+    ```
+    
+    Returns:
+        dict: { 'keyStr': str, 'key': bytes, 'iv': bytes }
     """
-    letters = string.ascii_letters + string.digits
-    key = ''.join(random.choice(letters) for _ in range(length))
-    log_info("Generated Session Key", f"{key[:8]}...{key[-8:]} ({len(key)} chars)", 4)
-    return key
+    # 64바이트 랜덤 데이터를 Base64로 인코딩
+    random_bytes = bytes(random.getrandbits(8) for _ in range(64))
+    key_str = base64.b64encode(random_bytes).decode('utf-8')
+    
+    # salt = keyStr의 마지막 16자
+    salt = key_str[-16:]
+    
+    # PBKDF2로 키 파생 (iterations=1024, dkLen=length)
+    key_bytes = PBKDF2(
+        password=key_str.encode('utf-8'),
+        salt=salt.encode('utf-8'),
+        dkLen=length,
+        count=1024,
+        hmac_hash_module=SHA1
+    )
+    
+    # IV = 키의 마지막 16바이트
+    iv_bytes = key_bytes[-16:]
+    
+    log_info("Generated Session Key (keyStr)", f"{key_str[:16]}...({len(key_str)} chars)", 4)
+    
+    return {
+        'keyStr': key_str,
+        'key': key_bytes,
+        'iv': iv_bytes
+    }
 
 
 def encrypt_with_rsa(data: str, public_key_str: str) -> str:
@@ -156,56 +209,44 @@ def encrypt_with_rsa(data: str, public_key_str: str) -> str:
     return result
 
 
-def encrypt_with_aes(plain_text: str, session_key: str, use_base64_input=False) -> str:
+def encrypt_with_aes(plain_text: str, key_info: dict) -> str:
     """
     AES-256-CBC로 데이터 암호화 (JavaScript bandiJS.encryptBase64AES 대응)
     
-    원리:
-    - 세션키(32 bytes)를 AES 키로 사용
-    - IV(Initialization Vector)는 키의 앞 16 bytes 사용
-    - PKCS7 패딩 적용
-    - 결과는 Base64로 인코딩
-    
     JavaScript 원본:
     ```javascript
-    var enc64Value = forge.util.encode64(encValue);  // 평문을 먼저 Base64
-    var cipher = forge.cipher.createCipher('AES-CBC', keyInfo.key);
-    cipher.start({iv: keyInfo.iv});
-    cipher.update(forge.util.createBuffer(enc64Value));
-    cipher.finish();
-    return forge.util.encode64(cipher.output.bytes());  // 암호문도 Base64
+    encryptBase64AES: function(value, keyInfo, isEncodeUri, isUtf8) {
+        var encValue = value;
+        var enc64Value = forge.util.encode64(encValue);  // Base64 인코딩
+        var cipher = forge.cipher.createCipher('AES-CBC', keyInfo.key);
+        cipher.start({iv: keyInfo.iv});
+        cipher.update(forge.util.createBuffer(enc64Value));
+        cipher.finish();
+        return forge.util.encode64(cipher.output.bytes());
+    }
     ```
     
     Args:
         plain_text: 암호화할 평문
-        session_key: 32자리 세션키
-        use_base64_input: True면 평문을 먼저 Base64 인코딩 (JS 동작과 동일)
+        key_info: generate_session_key()에서 반환된 키 정보 dict
     
     Returns:
         Base64로 인코딩된 암호문
     """
     print(f"\n{Colors.CYAN}    [AES 암호화 과정]{Colors.END}")
     
-    # 키 준비 (32 bytes)
-    key_bytes = session_key.encode('utf-8')
-    log_info("AES Key", f"{session_key[:8]}... ({len(key_bytes)} bytes)", 6)
+    key_bytes = key_info['key']
+    iv_bytes = key_info['iv']
     
-    # IV = 키의 앞 16 bytes (JavaScript: keyInfo.iv = keyBytes.slice(keyBytes.length - 16))
-    # 주의: JS에서는 마지막 16바이트를 IV로 사용하지만, 실제로는 PBKDF2로 파생된 키 사용
-    # 여기서는 간소화하여 앞 16바이트 사용 (서버 구현에 맞춤)
-    iv = key_bytes[:16]
-    log_info("IV", f"{iv.decode('utf-8', errors='replace')[:8]}... ({len(iv)} bytes)", 6)
+    log_info("AES Key", f"PBKDF2 derived ({len(key_bytes)} bytes)", 6)
+    log_info("IV", f"last 16 bytes of key ({len(iv_bytes)} bytes)", 6)
     
-    # 입력 데이터 준비
-    if use_base64_input:
-        # JavaScript와 동일: 평문을 먼저 Base64 인코딩
-        input_data = base64.b64encode(plain_text.encode('utf-8'))
-        log_info("Pre-encoded (Base64)", f"{input_data[:20]}...", 6)
-    else:
-        input_data = plain_text.encode('utf-8')
+    # 평문을 먼저 Base64 인코딩 (JS와 동일)
+    input_data = base64.b64encode(plain_text.encode('utf-8'))
+    log_info("Pre-encoded (Base64)", f"{input_data[:20]}...", 6)
     
     # AES-256-CBC 암호화
-    cipher = AES.new(key_bytes, AES.MODE_CBC, iv)
+    cipher = AES.new(key_bytes, AES.MODE_CBC, iv_bytes)
     padded = pad(input_data, AES.block_size)
     encrypted = cipher.encrypt(padded)
     
@@ -341,37 +382,37 @@ class MJUSSOLogin:
         
         print(f"\n  {Colors.BOLD}[암호화 원리]{Colors.END}")
         print("  ┌─────────────────────────────────────────────────────────┐")
-        print("  │ 1. 세션키 생성 (Client)                                  │")
-        print("  │    └→ 매 로그인마다 새로운 32자리 랜덤 키 생성           │")
+        print("  │ 1. 세션키 생성 (Client)                                    │")
+        print("  │    └→ 매 로그인마다 새로운 32자리 랜덤 키 생성                   │")
         print("  │                                                         │")
-        print("  │ 2. RSA 암호화 (키 교환)                                  │")
-        print("  │    └→ '세션키,타임스탬프'를 서버 공개키로 암호화         │")
-        print("  │    └→ 서버만 비밀키로 복호화 가능                        │")
+        print("  │ 2. RSA 암호화 (키 교환)                                    │")
+        print("  │    └→ '세션키,타임스탬프'를 서버 공개키로 암호화                  │")
+        print("  │    └→ 서버만 비밀키로 복호화 가능                              │")
         print("  │                                                         │")
-        print("  │ 3. AES 암호화 (데이터 보호)                              │")
-        print("  │    └→ 비밀번호를 세션키로 암호화                         │")
-        print("  │    └→ 서버가 세션키를 복호화한 후에만 해독 가능          │")
+        print("  │ 3. AES 암호화 (데이터 보호)                                 │")
+        print("  │    └→ 비밀번호를 세션키로 암호화                              │")
+        print("  │    └→ 서버가 세션키를 복호화한 후에만 해독 가능                   │")
         print("  └─────────────────────────────────────────────────────────┘")
         
-        # 1. 세션키 생성
-        print(f"\n  {Colors.CYAN}[1] 세션키 생성{Colors.END}")
-        session_key = generate_session_key(32)
+        # 1. 세션키 생성 (PBKDF2 파생 포함)
+        print(f"\n  {Colors.CYAN}[1] 세션키 생성 (PBKDF2){Colors.END}")
+        key_info = generate_session_key(32)
         
         # 2. 타임스탬프 생성
         timestamp = str(int(time.time() * 1000))
         log_info("Timestamp", timestamp, 4)
         print(f"      → 용도: 재전송 공격(Replay Attack) 방지")
         
-        # 3. RSA 암호화 (세션키 + 타임스탬프)
+        # 3. RSA 암호화 (keyStr + 타임스탬프) - keyStr을 서버로 전송
         print(f"\n  {Colors.CYAN}[2] RSA 암호화 (키 교환){Colors.END}")
-        rsa_payload = f"{session_key},{timestamp}"
-        log_info("RSA Payload", f"'{session_key[:8]}...,{timestamp}'", 4)
+        rsa_payload = f"{key_info['keyStr']},{timestamp}"
+        log_info("RSA Payload", f"'{key_info['keyStr'][:16]}...,{timestamp}'", 4)
         encsymka = encrypt_with_rsa(rsa_payload, self.public_key)
         
-        # 4. AES 암호화 (비밀번호)
+        # 4. AES 암호화 (비밀번호) - PBKDF2로 파생된 key와 iv 사용
         print(f"\n  {Colors.CYAN}[3] AES 암호화 (비밀번호){Colors.END}")
         log_info("Password (Plain)", "****", 4)
-        pw_enc = encrypt_with_aes(self.user_pw, session_key, use_base64_input=True)
+        pw_enc = encrypt_with_aes(self.user_pw, key_info)
         
         log_success("암호화 완료")
         
@@ -521,7 +562,10 @@ class MJUSSOLogin:
             if 'signin-form' not in response.text or '로그아웃' in response.text:
                 # 폼의 action에서 redirect_uri를 추출하여 해당 URL로 이동
                 redirect_uri_match = re.search(r'redirect_uri=([^&"\'>\s]+)', self.form_action)
-                if redirect_uri_match and success_domain not in response.url:
+                # service 정보에서 success_domain 가져오기
+                service_info = self.SERVICES.get(service, {}) if isinstance(service, str) else service
+                success_domain = service_info.get('success_check', {}).get('url_contains', '') if isinstance(service_info, dict) else ''
+                if redirect_uri_match and success_domain and success_domain not in response.url:
                     from urllib.parse import unquote
                     target_redirect = unquote(redirect_uri_match.group(1))
                     print(f"\n  {Colors.YELLOW}→ 대상 서비스로 직접 접근 시도...{Colors.END}")
@@ -586,9 +630,12 @@ class MJUSSOLogin:
             print(f"  3. {success_domain}으로 리다이렉트")
             print(f"  4. 서비스 세션 생성 완료")
             
-            # 최종 쿠키 상태
+            # 최종 쿠키 상태 (중복 쿠키 처리)
             print(f"\n  {Colors.BOLD}[최종 쿠키 상태]{Colors.END}")
-            all_cookies = dict(self.session.cookies)
+            all_cookies = {}
+            for cookie in self.session.cookies:
+                key = f"{cookie.name}@{cookie.domain}"
+                all_cookies[key] = cookie.value
             for name, value in all_cookies.items():
                 log_info(name, f"{value[:30]}..." if len(value) > 30 else value, 4)
             
@@ -683,10 +730,10 @@ def main():
     print(f"""
 {Colors.BOLD}{Colors.HEADER}
 ╔══════════════════════════════════════════════════════════════════════╗
-║              명지대학교 SSO 로그인 테스트 프로그램                      ║
+║              명지대학교 SSO 로그인 테스트 프로그램                           ║
 ║                                                                      ║
-║  이 프로그램은 SSO 로그인 과정을 상세히 분석하고 로깅합니다.              ║
-║  - 하이브리드 암호화 (RSA + AES)                                      ║
+║  이 프로그램은 SSO 로그인 과정을 상세히 분석하고 로깅합니다.                      ║
+║  - 하이브리드 암호화 (RSA + AES)                                         ║
 ║  - OAuth2 Authorization Code Flow                                    ║
 ╚══════════════════════════════════════════════════════════════════════╝
 {Colors.END}

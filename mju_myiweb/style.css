@@ -1,0 +1,67 @@
+@charset "utf-8";
+/*@import "/Web-home/content/css/contentCommon.css";*/
+@import url('https://fonts.googleapis.com/css?family=Noto+Sans+KR:300,400,400,700&display=swap&subset=korean');
+
+*{font-family:'Noto Sans KR', Nanum Gothic ,nanumgothic,"돋움",dotum,tahoma,sans-serif;}
+
+body{	font-size:16px;	font-weight:300;}
+#contentsEditHtml{	line-height:1.6;	color:#666;}
+b, strong {font-weight:500;}
+
+a:hover{color:#005bac;}
+.sub #_contentBuilder .objHeading_h2,
+.sub #_contentBuilder .objHeading_h3,
+.sub #_contentBuilder .objHeading_h4{position:relative; font-weight:500; letter-spacing:-1px; line-height:1.2;}
+.sub #_contentBuilder .objHeading_h2{font-size:24px; color:#1e5ba8; margin:40px 0 20px; }
+.sub #_contentBuilder .objHeading_h3{font-size:20px; color:#2b3e5c; margin:35px 0 10px;  background:url(./images/h3.png) left 8px no-repeat; padding-left:30px;}
+.sub #_contentBuilder .objHeading_h4{font-size:18px; color:#404449; margin:25px 0 10px 0; background:url(./images/h4.png) left 10px no-repeat; padding-left:30px;}
+.sub #_contentBuilder .objHeading_h5{font-size:16px; color:#272727; margin:10px 0 10px 0; background:url(./images/h5_icon.png) left 10px no-repeat; padding-left:10px;}
+
+._objHtml .tableWrap{overflow-x:auto; }
+._objHtml .tableWrap table{min-width:600px;}
+._objHtml table{border-top:2px solid #565c6b}
+._objHtml table caption{width:0; height:0; position:relative;}
+._objHtml table thead th{background-color:#f4f5f7; font-weight:400; border-bottom:1px solid #ddd; padding:10px 5px;border-right:1px solid #ddd;}
+._objHtml table thead th:last-child{border-right:none;}
+._objHtml table tbody td{border-bottom:1px solid #ddd; padding:10px 5px 10px 10px;  border-right:1px solid #ddd; font-weight:300;}
+._objHtml table tbody td:last-child{border-right:none;}
+._objHtml table tbody th{border-bottom:1px solid #ddd; padding:10px 5px; border-right:1px solid #ddd;background-color:#f9fafc; font-weight:400;}
+._objHtml table tbody th:last-child{border-right:none;}
+
+.tableWrap{overflow-x:auto; }
+.tableWrap table{min-width:800px;}
+.tableWrap table{border-top:2px solid #6186bf}
+.tableWrap table caption{width:0; height:0; position:relative;}
+.tableWrap table thead th{background-color:#ecf1f6; font-weight:500; border-bottom:1px solid #ddd; padding:10px 5px;border-right:1px solid #ddd; color:#0e2c5d;}
+.tableWrap table thead th:last-child{border-right:none;}
+.tableWrap table tbody td{border-bottom:1px solid #ddd; padding:10px 5px 10px 10px;  border-right:1px solid #ddd; font-weight:300;}
+.tableWrap table tbody td:last-child{border-right:none;}
+.tableWrap table tbody th{border-bottom:1px solid #ddd; padding:10px 5px; border-right:1px solid #ddd;background-color:#fbfbfb; font-weight:400;}
+.tableWrap table tbody th:last-child{border-right:none;}
+
+._objHtml .ul_1 > li{position:relative; padding-left:15px; margin-bottom:5px; background:url(./images/ul_1Dot.png) left 10px no-repeat;}
+
+._objHtml .ul_2{margin-left:15px;}
+._objHtml .ul_2 > li{position:relative; padding-left:15px; margin-bottom:5px; color:#888;}
+._objHtml .ul_2 > li:before{content:''; width:5px; height:5px; display:block; background-color:#728daf; position:absolute; left:0; top:9px; border-radius:100%;}
+
+.ol_num li{margin-bottom:10px; position:relative; padding-left:25px;}
+.ol_num li strong{margin-bottom:10px;}
+.ol_num li span{position:absolute; left:0; top:5px; display:block; margin:-2px 5px 0 0; background-color:#94bbcd; color:#fff; border-radius:10px; width:20px; height:20px; text-align:center; font-size:12px;}
+
+._objHtml .f-orange{color:#ff6c00;}
+._objHtml .f-teal{color:#17a88e;}
+._objHtml .f-blue{color:#2c6aba;}
+._objHtml .f-red{color:#9e0b0f;}
+
+@media only screen and (max-width:900px){
+	._objHtml .tableWrap:before{content:'※ 좌우로 스크롤 해주세요'; color:#2c6aba; font-size:12px; font-weight:400;}
+}
+
+.mark01{color:#ff6000; background:url(./images/mark01.png) left 0px no-repeat; padding-left:32px; line-height:1.6; margin:5px 0;}
+.mark02{color:#b61f24; background:url(./images/mark02.png) left 0px no-repeat; padding-left:32px; line-height:1.6; margin:5px 0;}
+.mark03{color:#f2a037; background:url(./images/mark03.png) left 0px no-repeat; padding-left:32px; line-height:1.6; margin:5px 0;}
+.mark04{color:#0e8772; background:url(./images/mark04.png) left 0px no-repeat; padding-left:32px;line-height:1.6; margin:5px 0;}
+
+.sub #_contentBuilder .multipleContentsDiv ._objHeading:first-child h2.objHeading_h2{margin-top:0;}
+

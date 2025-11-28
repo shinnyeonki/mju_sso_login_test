@@ -1,0 +1,37 @@
+@charset "utf-8";
+
+
+/* 조직도 위치조정 */
+._orgchart .subbox ul.con_1 > li:nth-child(1){
+	margin-bottom:10px !important;
+}
+._orgchart .subbox ul.con_1 > li:nth-child(1) ul.con_2:nth-child(7){
+  margin-top:74px;
+}
+._orgchart .subbox ul.con_1 > li:nth-child(1) ul.con_2:nth-child(8){
+  margin-top:5px;
+}
+._orgchart .subbox ul.con_1 > li:nth-child(1) ul.con_2:nth-child(9){
+  margin-top:75px;
+}
+
+._orgchart .subbox ul.con_1 > li:nth-child(3){
+  margin-top:60px;
+}
+._orgchart .subbox ul.con_1 > li:nth-child(4){
+
+}
+
+._orgchart .subbox ul.con_1 > li:nth-child(4) ul.con_2 li:nth-child(3){
+  margin-top:10px;
+}
+._orgchart .subbox ul.con_1 > li:nth-child(4) ul.con_2 li:nth-child(12){
+  margin-top:-15px;
+}
+._orgchart .subbox ul.con_1 > li:nth-child(5){
+  margin-top:-20px;
+}
+
+/*._orgchart .subbox ul.con_2 > li:nth-child(10){
+  margin-top:-15px;
+} */

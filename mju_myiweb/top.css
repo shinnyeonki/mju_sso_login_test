@@ -1,0 +1,67 @@
+@charset "UTF-8";
+
+div#msi-top{
+	display: grid;
+	grid-template-columns: 260px 1fr;
+	margin: 20px 34px;
+	row-gap: 22px;
+}
+
+div#msi-session{display: grid; align-items: center; grid-template-columns: fit-content(140px) 120px; gap:5px;}
+
+#msi-session > #session-time{position: relative; height:30px;}
+#msi-session > #session-time > iframe{
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	overflow:hidden;
+	margin-top:3px;
+}
+
+#msi-session > #session-txt{ font-size:13px; line-height:24px; color: #48c5ff;}
+
+#msi-option{display: flex; justify-content: flex-end; align-items: center;}
+#msi-option > ul {display:flex;align-items:center; justify-content: flex-end;}
+#msi-option > ul > li + li {margin-left:24px;}
+#msi-option .btn-global-item {position:relative; display:block;font-size:13px;line-height:24px;color:#48c5ff;padding-left:22px;}
+#msi-option .btn-global-item:before {content:'';position:absolute;top:0;left:0;width:24px;height:24px;background-repeat:no-repeat;background-position:left top;}
+#msi-option .btn-global-item.language:before {background-image:url(../new_images/icon/icon_gloabl_language.png);}
+#msi-option .btn-global-item.personal:before {background-image:url(../new_images/icon/icon_gloabl_personal.png);}
+#msi-option .btn-global-item.remote:before {background-image:url(../new_images/icon/icon_global_remote.png);}
+#msi-option .btn-global-item.modify:before {background-image:url(../new_images/icon/icon_global_modify.png);}
+#msi-option .btn-global-item.logout:before {background-image:url(../new_images/icon/icon_global_logout.png);}
+#msi-option .btn-global-item.graduation:before {background-image:url(../new_images/icon/icon_graduation_cap.png);}
+
+#msi-logo{position: relative;}
+#msi-logo > #msi-mainlogo > a {position:absolute;top:0;left:10px;width:100%;height:100%;font-size:0;background:url(../new_images/common/pc_logo_new.png) left top no-repeat;}
+
+#msi-external > ul {display:flex;align-items:center; justify-content: flex-end;}
+#msi-external > ul > li + li {margin-left:clamp(24px, 3.5vw, 52px);}
+#msi-external > ul > li > a {position:relative; display:block; font-size:18px;line-height:38px;white-space:nowrap; color:#fff;}
+#msi-external > ul > li.actived > a:before {content:''; position:absolute; top:0; left:50%;display:block;width:6px;height:6px;background:url(../new_images/icon/icon_gnb_on.png) left top no-repeat; margin-left:-3px;}
+#msi-external > ul > li.actived > a{color:#48c5ff;}
+
+@media only screen and (max-width:1280px){
+	div#msi-top {margin: 20px 14px;}
+	#msi-external > ul > li + li {margin-left:30px;}
+	#msi-external > ul > li > a {font-size:16px;}
+
+}
+
+@media only screen and (min-width:1024px){
+	.mobileshow{display: none !important;}
+}
+@media only screen and (max-width:1024px){
+	.mobilehide{display: none !important;}
+	
+	div#msi-top {grid-template-columns: 1fr; grid-template-rows: 30px 1fr; margin: 0px 14px; row-gap: 0px;}
+	
+	div#msi-session{justify-self: center;}
+	div#msi-logo{ display: flex; justify-content: space-between; align-items: center;}
+	
+	div#msi-m-option{display: flex; flex-direction: row;}
+	
+	#msi-logo > #msi-mainlogo > a {display: block; position:relative; width:149px;height:24px;font-size:0;background:url(../new_images/common/mobile_logo_new.png) left top no-repeat;background-size:149px auto;}
+}
