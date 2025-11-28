@@ -7,8 +7,6 @@ JavaScript 원본 (bandiJS):
 - genKey(length): 세션키 생성 + PBKDF2로 AES 키 파생
 - encryptJavaPKI(data): RSA로 암호화
 - encryptBase64AES(data, keyInfo): AES로 암호화
-
-cryptography 라이브러리 사용 (OpenSSL 기반, 더 빠름)
 """
 
 import base64

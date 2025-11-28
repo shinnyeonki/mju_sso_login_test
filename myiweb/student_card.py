@@ -10,7 +10,7 @@ MSI 서비스에서 학생카드 정보를 조회하고 파싱
 4. 리다이렉트 폼 처리 (JavaScript onLoad 폼 자동 제출 대체)
 5. 학생 정보 HTML 파싱
 """
-
+from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
@@ -23,11 +23,13 @@ from .utils import (
     log_warning, log_request, log_response
 )
 from .exceptions import (
+    MyIWebError,
     NetworkError,
     PageParsingError,
     SessionExpiredError,
     InvalidCredentialsError
 )
+from .sso import MJUSSOLogin
 
 
 @dataclass
@@ -68,6 +70,38 @@ class StudentInfo:
     # 원본 데이터 (딕셔너리)
     raw_data: Dict[str, Any] = field(default_factory=dict)
     
+    @classmethod
+    def from_login(cls, user_id: str, user_pw: str, verbose: bool = True) -> StudentInfo:
+        """
+        사용자 로그인부터 학생 정보 조회까지 전 과정을 처리하는 고수준 API
+        
+        Args:
+            user_id: 학번
+            user_pw: 비밀번호
+            verbose: 상세 로그 출력 여부
+        
+        Returns:
+            StudentInfo: 모든 정보가 채워진 학생 정보 객체
+            
+        Raises:
+            MyIWebError: 학생 정보 조회 과정에서 발생하는 모든 예외의 기본 클래스
+        """
+        # Step 1: MSI 로그인 (SSO 인증 + MSI 세션 설정 완료)
+        sso = MJUSSOLogin(user_id, user_pw, verbose=verbose)
+        session = sso.login(service='msi')
+        
+        # Step 2: 학생카드 정보 조회
+        fetcher = StudentCardFetcher(session, user_pw, verbose=verbose)
+        student_info = fetcher.fetch()
+        
+        if student_info:
+            if verbose:
+                student_info.print_summary()
+            return student_info
+        
+        # fetcher.fetch()가 None을 반환하는 경우는 없지만, 안정성을 위해 남겨둠
+        raise MyIWebError("알 수 없는 이유로 학생 정보 조회에 실패했습니다.")
+
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환"""
         return {

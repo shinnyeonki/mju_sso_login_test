@@ -9,10 +9,9 @@ MSI(My iWeb) 서비스에 접속하여 학생 정보를 조회하는 모듈
 - crypto: RSA/AES 암호화 유틸리티
 - sso: SSO 로그인 클래스
 - student_card: 학생카드 정보 조회
-- main: 메인 실행 및 고수준 API
+- __main__: `python -m myiweb`을 위한 CLI 엔트리포인트
 """
 
-from .main import fetch_student_info
 from .sso import MJUSSOLogin
 from .student_card import StudentCardFetcher, StudentInfo
 from .exceptions import (
@@ -24,13 +23,12 @@ from .exceptions import (
 )
 
 __all__ = [
-    # 고수준 API 함수
-    'fetch_student_info',
+    # 고수준 API 클래스
+    'StudentInfo',
     
-    # 핵심 클래스
+    # 저수준 API 클래스 (내부 로직 접근용)
     'MJUSSOLogin',
     'StudentCardFetcher',
-    'StudentInfo',
     
     # 예외 클래스
     'MyIWebError',
