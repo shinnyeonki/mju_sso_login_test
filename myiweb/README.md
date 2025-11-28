@@ -15,14 +15,17 @@
 
 ```
 myiweb/
-├── __init__.py        # 패키지 초기화 및 공개 API 정의
-├── __main__.py        # python -m myiweb 실행을 위한 엔트리포인트
-├── main.py            # 두 핵심 프로세스를 조율하는 메인 실행 로직
-├── sso.py             # SSO 통합 로그인 자동화 클래스 (MJUSSOLogin)
-├── crypto.py          # SSO 로그인에 사용되는 RSA/AES 하이브리드 암호화 유틸리티
-├── student_card.py    # 학생카드 정보 조회 및 파싱 클래스 (StudentCardFetcher)
-├── utils.py           # 로깅, 색상 코드 등 공통 유틸리티
-└── README.md          # 본 기술 문서
+├── __init__.py           # 패키지 초기화 및 공개 API 정의
+├── __main__.py           # `python -m myiweb` 실행을 위한 CLI 엔트리포인트
+├── abc.py                # 추상 기본 클래스 (BaseFetcher)
+├── crypto.py             # SSO 로그인에 사용되는 RSA/AES 암호화 유틸리티
+├── examples.py           # 라이브러리 사용 예제
+├── exceptions.py         # 커스텀 예외 클래스
+├── sso.py                # SSO 통합 로그인 자동화 클래스 (MJUSSOLogin)
+├── student_card.py       # 학생카드 정보(StudentCard) 및 조회 로직
+├── student_changelog.py  # 학적변동내역 정보(StudentChangeLog) 및 조회 로직
+├── utils.py              # 로깅, 색상 코드 등 공통 유틸리티
+└── README.md             # 본 기술 문서
 ```
 
 ## 3. 핵심 동작 원리: 클라이언트-서버 상호작용
