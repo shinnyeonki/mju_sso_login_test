@@ -64,8 +64,8 @@ def setup_logging(level: int = logging.INFO, use_colors: bool = True) -> None:
         # WARNING 이상만 출력
         setup_logging(logging.WARNING)
     """
-    # 루트 로거가 아닌 myiweb 패키지 로거 설정
-    logger = logging.getLogger('myiweb')
+    # 루트 로거가 아닌 myiweb_logger 패키지 로거 설정
+    logger = logging.getLogger('myiweb_logger')
     logger.setLevel(level)
     
     # 기존 핸들러 제거
@@ -114,7 +114,7 @@ def get_logger(name: str) -> logging.Logger:
 
 
 # 기존 호환성을 위한 함수들 (logging 기반으로 재구현)
-_compat_logger = logging.getLogger('myiweb.compat')
+_compat_logger = logging.getLogger('myiweb_logger.compat')
 
 
 def log_section(title: str) -> None:

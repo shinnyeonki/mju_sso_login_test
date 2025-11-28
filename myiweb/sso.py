@@ -19,12 +19,11 @@ from dataclasses import dataclass
 import requests
 from bs4 import BeautifulSoup
 
-from .utils import get_logger, mask_sensitive
+from .utils import (
+    Colors, log_section, log_step, log_info, log_success, log_error, 
+    log_warning, log_request, log_response, mask_sensitive
+)
 from .crypto import generate_session_key, encrypt_with_rsa, encrypt_with_aes
-
-
-# 모듈 로거
-logger = get_logger(__name__)
 
 
 @dataclass
@@ -74,14 +73,16 @@ class MJUSSOLogin:
         }
     }
     
-    def __init__(self, user_id: str, user_pw: str):
+    def __init__(self, user_id: str, user_pw: str, verbose: bool = True):
         """
         Args:
             user_id: 학번/교번
             user_pw: 비밀번호
+            verbose: 상세 로그 출력 여부
         """
         self.user_id = user_id
         self.user_pw = user_pw
+        self.verbose = verbose
         
         # requests 세션 생성 (쿠키 자동 관리)
         self.session = requests.Session()
@@ -100,37 +101,41 @@ class MJUSSOLogin:
         
     def _parse_login_page(self, html: str) -> bool:
         """로그인 페이지에서 필요한 정보 추출"""
-        logger.info("[Step 1-2] 로그인 페이지 파싱")
+        if self.verbose:
+            log_step("1-2", "로그인 페이지 파싱")
         
         soup = BeautifulSoup(html, 'html.parser')
         
         # 1. 공개키 추출
         public_key_input = soup.find('input', {'id': 'public-key'})
         if not public_key_input:
-            logger.error("공개키(public-key)를 찾을 수 없습니다.")
+            log_error("공개키(public-key)를 찾을 수 없습니다.")
             return False
         self.public_key = public_key_input.get('value')
         
-        logger.debug(f"Public Key: {self.public_key}")
+        if self.verbose:
+            log_info("Public Key", self.public_key)
         
         # 2. CSRF 토큰 추출
         csrf_input = soup.find('input', {'id': 'c_r_t'})
         if not csrf_input:
-            logger.error("CSRF 토큰(c_r_t)을 찾을 수 없습니다.")
+            log_error("CSRF 토큰(c_r_t)을 찾을 수 없습니다.")
             return False
         self.csrf_token = csrf_input.get('value')
         
-        logger.debug(f"CSRF Token: {self.csrf_token}")
+        if self.verbose:
+            log_info("CSRF Token", self.csrf_token)
         
         # 3. Form Action URL 추출
         form = soup.find('form', {'id': 'signin-form'})
         if not form:
-            logger.error("로그인 폼(signin-form)을 찾을 수 없습니다.")
+            log_error("로그인 폼(signin-form)을 찾을 수 없습니다.")
             return False
         self.form_action = form.get('action')
         
-        logger.debug(f"Form Action: {self.form_action}")
-        logger.info("✓ 페이지 파싱 완료")
+        if self.verbose:
+            log_info("Form Action", self.form_action)
+            log_success("페이지 파싱 완료")
         
         return True
     
@@ -183,11 +188,12 @@ class MJUSSOLogin:
         if not form_data:
             return None
         
-        logger.info(f"[Step 3-{step+2}] JS 폼 자동 제출 처리")
-        logger.debug(f"Form Action: {action_url}")
-        # 민감 정보 마스킹
-        safe_data = {k: (mask_sensitive(v) if k in ('user_id', 'password', 'pw') else v[:30]+'...' if len(str(v)) > 30 else v) for k, v in form_data.items()}
-        logger.debug(f"Form Data: {safe_data}")
+        if self.verbose:
+            log_step(f"3-{step+2}", f"JS 폼 자동 제출 처리")
+            log_info("Form Action", action_url, 4)
+            # 민감 정보 마스킹
+            safe_data = {k: (mask_sensitive(v) if k in ('user_id', 'password', 'pw') else v[:30]+'...' if len(str(v)) > 30 else v) for k, v in form_data.items()}
+            log_info("Form Data", str(safe_data), 4)
         
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -199,24 +205,27 @@ class MJUSSOLogin:
 
     def _prepare_encrypted_data(self) -> dict:
         """암호화된 로그인 데이터 준비"""
-        logger.info("[Step 2] 암호화 데이터 준비")
+        if self.verbose:
+            log_step("2", "암호화 데이터 준비")
         
         # 1. 세션키 생성 (PBKDF2 파생 키 포함)
         key_info = generate_session_key(32)
         
-        logger.debug(f"Session Key (keyStr): {key_info['keyStr'][:16]}...({len(key_info['keyStr'])} chars)")
+        if self.verbose:
+            log_info("Session Key (keyStr)", f"{key_info['keyStr'][:16]}...({len(key_info['keyStr'])} chars)", 4)
         
         # 2. 타임스탬프 생성
         timestamp = str(int(time.time() * 1000))
         
         # 3. RSA 암호화 (keyStr + 타임스탬프) - 서버로 keyStr 전송
         rsa_payload = f"{key_info['keyStr']},{timestamp}"
-        encsymka = encrypt_with_rsa(rsa_payload, self.public_key)
+        encsymka = encrypt_with_rsa(rsa_payload, self.public_key, verbose=self.verbose)
         
         # 4. AES 암호화 (비밀번호) - PBKDF2로 파생된 key와 iv 사용
-        pw_enc = encrypt_with_aes(self.user_pw, key_info)
+        pw_enc = encrypt_with_aes(self.user_pw, key_info, verbose=self.verbose)
         
-        logger.info("✓ 암호화 완료")
+        if self.verbose:
+            log_success("암호화 완료")
         
         return {
             'user_id': self.user_id,
@@ -242,21 +251,25 @@ class MJUSSOLogin:
         
         service_info = self.SERVICES[service]
         
-        logger.info(f"\n{'='*70}\n MJU SSO 로그인: {service_info['name']}\n{'='*70}\n")
-        logger.info(f"User ID: {mask_sensitive(self.user_id)}")
+        if self.verbose:
+            log_section(f"MJU SSO 로그인: {service_info['name']}")
+            print(f"  User ID: {mask_sensitive(self.user_id)}")
         
         # Step 1: 로그인 페이지 접속
-        logger.info("[Step 1-1] 로그인 페이지 접속 (GET)")
+        if self.verbose:
+            log_step("1-1", "로그인 페이지 접속 (GET)")
         
         login_url = service_info['url']
         
-        logger.debug(f">>> GET Request >>>\n  URL: {login_url}")
+        if self.verbose:
+            log_request('GET', login_url)
         
         try:
             response = self.session.get(login_url, timeout=10)
-            logger.debug(f"<<< Response <<<\n  Status Code: {response.status_code}\n  Final URL: {response.url}")
+            if self.verbose:
+                log_response(response)
         except requests.RequestException as e:
-            logger.error(f"페이지 접속 실패: {e}")
+            log_error(f"페이지 접속 실패: {e}")
             return LoginResult(success=False, message=str(e))
         
         # 페이지 파싱
@@ -267,7 +280,8 @@ class MJUSSOLogin:
         encrypted_data = self._prepare_encrypted_data()
         
         # Step 3: 로그인 요청
-        logger.info("[Step 3] 로그인 요청 전송 (POST)")
+        if self.verbose:
+            log_step("3", "로그인 요청 전송 (POST)")
         
         if self.form_action.startswith('/'):
             action_url = f"https://sso.mju.ac.kr{self.form_action}"
@@ -281,7 +295,8 @@ class MJUSSOLogin:
             'Upgrade-Insecure-Requests': '1',
         }
         
-        logger.debug(f">>> POST Request >>>\n  URL: {action_url}")
+        if self.verbose:
+            log_request('POST', action_url, headers, encrypted_data)
         
         try:
             response = self.session.post(
@@ -291,7 +306,8 @@ class MJUSSOLogin:
                 allow_redirects=True,
                 timeout=15
             )
-            logger.debug(f"<<< Response <<<\n  Status Code: {response.status_code}\n  Final URL: {response.url}")
+            if self.verbose:
+                log_response(response)
             
             # JavaScript 폼 제출 및 리다이렉트 처리 (최대 5회)
             for i in range(5):
@@ -299,7 +315,8 @@ class MJUSSOLogin:
                 form_handled = self._handle_js_form_submit(response, i)
                 if form_handled:
                     response = form_handled
-                    logger.debug(f"<<< Response <<<\n  Status Code: {response.status_code}\n  Final URL: {response.url}")
+                    if self.verbose:
+                        log_response(response)
                     continue
                 
                 # location.href 리다이렉트 처리
@@ -307,21 +324,24 @@ class MJUSSOLogin:
                 if js_redirect_match:
                     redirect_url = js_redirect_match.group(1)
                     if redirect_url.startswith('http'):
-                        logger.info(f"[Step 3-{i+2}] JS 리다이렉트 따라가기")
-                        logger.debug(f"JS Redirect URL: {redirect_url}")
+                        if self.verbose:
+                            log_step(f"3-{i+2}", "JS 리다이렉트 따라가기")
+                            log_info("JS Redirect URL", redirect_url, 4)
                         response = self.session.get(redirect_url, allow_redirects=True, timeout=15)
-                        logger.debug(f"<<< Response <<<\n  Status Code: {response.status_code}\n  Final URL: {response.url}")
+                        if self.verbose:
+                            log_response(response)
                         continue
                 
                 # 더 이상 처리할 JS 동작이 없음
                 break
                         
         except requests.RequestException as e:
-            logger.error(f"로그인 요청 실패: {e}")
+            log_error(f"로그인 요청 실패: {e}")
             return LoginResult(success=False, message=str(e))
         
         # Step 4: 결과 확인
-        logger.info("[Step 4] 로그인 결과 확인")
+        if self.verbose:
+            log_step("4", "로그인 결과 확인")
         
         final_url = response.url
         success_domain = service_info['success_domain']
@@ -362,7 +382,8 @@ class MJUSSOLogin:
         # 1. 실제 대상 도메인으로 이동했고 로그인 폼이 없는 경우
         # 2. 또는 로그아웃 버튼이 있는 경우
         if (actually_redirected and not has_signin_form) or (has_logout_button and not has_signin_form):
-            logger.info(f"✓ 로그인 성공! ({service_info['name']})")
+            if self.verbose:
+                log_success(f"로그인 성공! ({service_info['name']})")
             
             # 쿠키를 안전하게 dict로 변환 (중복 쿠키 처리)
             cookies = {}
@@ -379,8 +400,9 @@ class MJUSSOLogin:
         
         # 에러 메시지가 있으면 실패
         if error_msg:
-            logger.error("로그인 실패")
-            logger.debug(f"Server Error: {error_msg}")
+            if self.verbose:
+                log_error("로그인 실패")
+                log_info("Server Error", error_msg, 4)
             
             return LoginResult(
                 success=False,
@@ -390,8 +412,9 @@ class MJUSSOLogin:
         
         # 폼이 다시 나타났으면 실패
         if has_signin_form:
-            logger.error("로그인 실패")
-            logger.debug("원인: 로그인 폼이 다시 표시됨 (인증 실패)")
+            if self.verbose:
+                log_error("로그인 실패")
+                log_info("원인", "로그인 폼이 다시 표시됨 (인증 실패)", 4)
             
             return LoginResult(
                 success=False,
@@ -400,7 +423,8 @@ class MJUSSOLogin:
             )
         
         # 알 수 없는 상태
-        logger.warning("로그인 결과 불확실")
+        if self.verbose:
+            log_warning("로그인 결과 불확실")
         
         return LoginResult(
             success=False,
@@ -416,28 +440,33 @@ class MJUSSOLogin:
         if not test_url:
             return False
         
-        logger.info("[Step 5] 세션 유효성 테스트")
-        logger.debug(f"Test URL: {test_url}")
+        if self.verbose:
+            log_step("5", "세션 유효성 테스트")
+            log_info("Test URL", test_url)
         
         try:
             response = self.session.get(test_url, timeout=10, allow_redirects=True)
             
-            logger.debug(f"응답 상태: {response.status_code}")
-            logger.debug(f"최종 URL: {response.url}")
+            if self.verbose:
+                log_info("응답 상태", response.status_code)
+                log_info("최종 URL", response.url)
             
             # SSO 또는 login_security로 리다이렉트되면 세션 만료
             if 'sso.mju.ac.kr' in response.url or 'login_security' in response.url:
-                logger.warning("세션이 유효하지 않음 (로그인 페이지로 리다이렉트)")
+                if self.verbose:
+                    log_warning("세션이 유효하지 않음 (로그인 페이지로 리다이렉트)")
                 return False
             
             # 로그아웃 버튼이 있으면 유효한 세션
             if '로그아웃' in response.text or 'logout' in response.text.lower():
-                logger.info("✓ 세션 유효함")
+                if self.verbose:
+                    log_success("세션 유효함")
                 return True
             
-            logger.warning("세션 상태 불확실")
+            if self.verbose:
+                log_warning("세션 상태 불확실")
             return False
             
         except requests.RequestException as e:
-            logger.error(f"테스트 실패: {e}")
+            log_error(f"테스트 실패: {e}")
             return False

@@ -18,11 +18,7 @@ from Crypto.Util.Padding import pad
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Hash import SHA1
 
-from .utils import get_logger
-
-
-# 모듈 로거
-logger = get_logger(__name__)
+from .utils import Colors, log_info
 
 
 def generate_session_key(length: int = 32) -> dict:
@@ -69,19 +65,21 @@ def generate_session_key(length: int = 32) -> dict:
     }
 
 
-def encrypt_with_rsa(data: str, public_key_str: str) -> str:
+def encrypt_with_rsa(data: str, public_key_str: str, verbose: bool = False) -> str:
     """
     RSA-PKCS1-v1.5로 데이터 암호화 (JavaScript bandiJS.encryptJavaPKI 대응)
     
     Args:
         data: 암호화할 데이터 (예: "keyStr,타임스탬프")
         public_key_str: Base64로 인코딩된 RSA 공개키
+        verbose: 상세 로그 출력 여부
     
     Returns:
         Base64로 인코딩된 암호문
     """
-    logger.debug("[RSA 암호화 과정]")
-    logger.debug(f"Input Data: {data[:30]}..." if len(data) > 30 else f"Input Data: {data}")
+    if verbose:
+        print(f"\n{Colors.CYAN}    [RSA 암호화 과정]{Colors.END}")
+        log_info("Input Data", f"{data[:30]}..." if len(data) > 30 else data, 6)
     
     # PEM 형식으로 변환
     pem_key = f"-----BEGIN PUBLIC KEY-----\n{public_key_str}\n-----END PUBLIC KEY-----"
@@ -89,19 +87,21 @@ def encrypt_with_rsa(data: str, public_key_str: str) -> str:
     # RSA 키 로드
     rsa_key = RSA.import_key(pem_key)
     
-    logger.debug(f"RSA Key Size: {rsa_key.size_in_bits()} bits")
+    if verbose:
+        log_info("RSA Key Size", f"{rsa_key.size_in_bits()} bits", 6)
     
     # PKCS1_v1_5 암호화 (Java 호환)
     cipher = PKCS1_v1_5.new(rsa_key)
     encrypted = cipher.encrypt(data.encode('utf-8'))
     result = base64.b64encode(encrypted).decode('utf-8')
     
-    logger.debug(f"Encrypted (RSA): {result[:30]}...({len(result)} chars)")
+    if verbose:
+        log_info("Encrypted (RSA)", f"{result[:30]}...({len(result)} chars)", 6)
     
     return result
 
 
-def encrypt_with_aes(plain_text: str, key_info: dict) -> str:
+def encrypt_with_aes(plain_text: str, key_info: dict, verbose: bool = False) -> str:
     """
     AES-256-CBC로 데이터 암호화 (JavaScript bandiJS.encryptBase64AES 대응)
     
@@ -122,22 +122,26 @@ def encrypt_with_aes(plain_text: str, key_info: dict) -> str:
     Args:
         plain_text: 암호화할 평문
         key_info: generate_session_key()에서 반환된 키 정보 dict
+        verbose: 상세 로그 출력 여부
     
     Returns:
         Base64로 인코딩된 암호문
     """
-    logger.debug("[AES 암호화 과정]")
+    if verbose:
+        print(f"\n{Colors.CYAN}    [AES 암호화 과정]{Colors.END}")
     
     key_bytes = key_info['key']
     iv_bytes = key_info['iv']
     
-    logger.debug(f"AES Key: PBKDF2 derived ({len(key_bytes)} bytes)")
-    logger.debug(f"IV: last 16 bytes of key ({len(iv_bytes)} bytes)")
+    if verbose:
+        log_info("AES Key", f"PBKDF2 derived ({len(key_bytes)} bytes)", 6)
+        log_info("IV", f"last 16 bytes of key ({len(iv_bytes)} bytes)", 6)
     
     # 평문을 먼저 Base64 인코딩 (JS와 동일)
     input_data = base64.b64encode(plain_text.encode('utf-8'))
     
-    logger.debug(f"Pre-encoded (Base64): {input_data[:20]}...")
+    if verbose:
+        log_info("Pre-encoded (Base64)", f"{input_data[:20]}...", 6)
     
     # AES-CBC 암호화
     cipher = AES.new(key_bytes, AES.MODE_CBC, iv_bytes)
@@ -146,6 +150,7 @@ def encrypt_with_aes(plain_text: str, key_info: dict) -> str:
     
     result = base64.b64encode(encrypted).decode('utf-8')
     
-    logger.debug(f"Encrypted (AES): {result[:30]}...({len(result)} chars)")
+    if verbose:
+        log_info("Encrypted (AES)", f"{result[:30]}...({len(result)} chars)", 6)
     
     return result

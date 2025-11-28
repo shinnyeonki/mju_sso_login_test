@@ -18,11 +18,10 @@ from typing import Optional, Dict, Any
 import requests
 from bs4 import BeautifulSoup
 
-from .utils import Colors, get_logger
-
-
-# 모듈 로거
-logger = get_logger(__name__)
+from .utils import (
+    Colors, log_section, log_step, log_info, log_success, log_error, 
+    log_warning, log_request, log_response
+)
 
 
 @dataclass
@@ -98,30 +97,30 @@ class StudentInfo:
         print(f"{'='*60}{Colors.END}")
         
         print(f"\n{Colors.BOLD}[기본 정보]{Colors.END}")
-        print(f"  학번: {self.student_id}")
-        print(f"  한글성명: {self.name_korean}")
-        print(f"  영문성명: {self.name_english_first} {self.name_english_last}")
+        log_info("학번", self.student_id)
+        log_info("한글성명", self.name_korean)
+        log_info("영문성명", f"{self.name_english_first} {self.name_english_last}")
         
         print(f"\n{Colors.BOLD}[학적 정보]{Colors.END}")
-        print(f"  학년: {self.grade}")
-        print(f"  학적상태: {self.status}")
-        print(f"  학부(과): {self.department}")
-        print(f"  상담교수: {self.advisor}")
+        log_info("학년", self.grade)
+        log_info("학적상태", self.status)
+        log_info("학부(과)", self.department)
+        log_info("상담교수", self.advisor)
         if self.design_advisor:
-            print(f"  학생설계전공지도교수: {self.design_advisor}")
+            log_info("학생설계전공지도교수", self.design_advisor)
         
         print(f"\n{Colors.BOLD}[연락처]{Colors.END}")
-        print(f"  전화번호: {self.phone}")
-        print(f"  휴대폰: {self.mobile}")
-        print(f"  E-Mail: {self.email}")
+        log_info("전화번호", self.phone)
+        log_info("휴대폰", self.mobile)
+        log_info("E-Mail", self.email)
         
         print(f"\n{Colors.BOLD}[주소]{Colors.END}")
-        print(f"  현거주지: ({self.current_zip}) {self.current_address1} {self.current_address2}")
-        print(f"  주민등록: ({self.registered_zip}) {self.registered_address1} {self.registered_address2}")
+        log_info("현거주지", f"({self.current_zip}) {self.current_address1} {self.current_address2}")
+        log_info("주민등록", f"({self.registered_zip}) {self.registered_address1} {self.registered_address2}")
         
         if self.photo_base64:
             print(f"\n{Colors.BOLD}[사진]{Colors.END}")
-            print(f"  사진 데이터: Base64 ({len(self.photo_base64)} chars)")
+            log_info("사진 데이터", f"Base64 ({len(self.photo_base64)} chars)")
 
 
 class StudentCardFetcher:
@@ -131,14 +130,16 @@ class StudentCardFetcher:
     STUDENT_CARD_URL = "https://msi.mju.ac.kr/servlet/su/sum/Sum00Svl01getStdCard"
     PASSWORD_VERIFY_URL = "https://msi.mju.ac.kr/servlet/sys/sys15/Sys15Svl01verifyPW"
     
-    def __init__(self, session: requests.Session, user_pw: str):
+    def __init__(self, session: requests.Session, user_pw: str, verbose: bool = True):
         """
         Args:
             session: 로그인된 requests 세션
             user_pw: 비밀번호 (2차 인증용)
+            verbose: 상세 로그 출력 여부
         """
         self.session = session
         self.user_pw = user_pw
+        self.verbose = verbose
         
         # CSRF 토큰
         self.csrf_token: Optional[str] = None
@@ -165,37 +166,41 @@ class StudentCardFetcher:
     
     def _get_csrf_token(self) -> bool:
         """MSI 홈페이지에서 CSRF 토큰 추출"""
-        logger.info("[Step 1] CSRF 토큰 추출")
-        logger.debug(f">>> GET Request >>>\n  URL: {self.MSI_HOME_URL}")
+        if self.verbose:
+            log_step("1", "CSRF 토큰 추출")
+            log_request('GET', self.MSI_HOME_URL)
         
         try:
             response = self.session.get(self.MSI_HOME_URL, timeout=10)
             
-            logger.debug(f"<<< Response <<<\n  Status Code: {response.status_code}\n  Final URL: {response.url}")
+            if self.verbose:
+                log_response(response, show_body=False)
             
             # SSO로 리다이렉트되면 세션 만료
             if 'sso.mju.ac.kr' in response.url:
-                logger.error("세션이 만료되었습니다. 다시 로그인해주세요.")
+                log_error("세션이 만료되었습니다. 다시 로그인해주세요.")
                 return False
             
             self.csrf_token = self._extract_csrf_from_html(response.text)
             
             if not self.csrf_token:
-                logger.error("CSRF 토큰을 찾을 수 없습니다.")
+                log_error("CSRF 토큰을 찾을 수 없습니다.")
                 return False
             
-            logger.debug(f"CSRF Token: {self.csrf_token}")
-            logger.info("✓ CSRF 토큰 추출 완료")
+            if self.verbose:
+                log_info("CSRF Token", self.csrf_token)
+                log_success("CSRF 토큰 추출 완료")
             
             return True
             
         except requests.RequestException as e:
-            logger.error(f"CSRF 토큰 추출 실패: {e}")
+            log_error(f"CSRF 토큰 추출 실패: {e}")
             return False
     
     def _access_student_card_page(self) -> Optional[str]:
         """sideform 방식으로 학생카드 페이지 접근"""
-        logger.info("[Step 2] 학생카드 페이지 접근 (sideform 방식)")
+        if self.verbose:
+            log_step("2", "학생카드 페이지 접근 (sideform 방식)")
         
         # sideform 데이터
         form_data = {
@@ -214,7 +219,8 @@ class StudentCardFetcher:
             'X-CSRF-TOKEN': self.csrf_token,
         }
         
-        logger.debug(f">>> POST Request >>>\n  URL: {self.STUDENT_CARD_URL}")
+        if self.verbose:
+            log_request('POST', self.STUDENT_CARD_URL, headers, form_data)
         
         try:
             response = self.session.post(
@@ -224,13 +230,14 @@ class StudentCardFetcher:
                 timeout=15
             )
             
-            logger.debug(f"<<< Response <<<\n  Status Code: {response.status_code}\n  Final URL: {response.url}")
+            if self.verbose:
+                log_response(response, show_body=False)
             
             self._last_url = response.url
             return response.text
             
         except requests.RequestException as e:
-            logger.error(f"학생카드 페이지 접근 실패: {e}")
+            log_error(f"학생카드 페이지 접근 실패: {e}")
             return None
     
     def _check_password_required(self, html: str) -> bool:
@@ -248,7 +255,8 @@ class StudentCardFetcher:
             <input type="hidden" name="_csrf" value="...">
         </form>
         """
-        logger.info("[Step 3] 비밀번호 인증")
+        if self.verbose:
+            log_step("3", "비밀번호 인증")
         
         # originalurl 추출
         original_match = re.search(r'name="originalurl"\s+value="([^"]+)"', html)
@@ -268,8 +276,9 @@ class StudentCardFetcher:
             'X-CSRF-TOKEN': self.csrf_token,
         }
         
-        safe_data = {k: ('****' if 'password' in k.lower() else v) for k, v in form_data.items()}
-        logger.debug(f">>> POST Request >>>\n  URL: {self.PASSWORD_VERIFY_URL}\n  Form Data: {safe_data}")
+        if self.verbose:
+            safe_data = {k: ('****' if 'password' in k.lower() else v) for k, v in form_data.items()}
+            log_request('POST', self.PASSWORD_VERIFY_URL, headers, safe_data)
         
         try:
             response = self.session.post(
@@ -279,13 +288,14 @@ class StudentCardFetcher:
                 timeout=15
             )
             
-            logger.debug(f"<<< Response <<<\n  Status Code: {response.status_code}\n  Final URL: {response.url}")
+            if self.verbose:
+                log_response(response, show_body=False)
             
             self._last_url = response.url
             return response.text
             
         except requests.RequestException as e:
-            logger.error(f"비밀번호 인증 실패: {e}")
+            log_error(f"비밀번호 인증 실패: {e}")
             return None
     
     def _handle_redirect_form(self, html: str) -> Optional[str]:
@@ -304,7 +314,8 @@ class StudentCardFetcher:
         });
         </script>
         """
-        logger.info("[Step 4] 리다이렉트 폼 처리")
+        if self.verbose:
+            log_step("4", "리다이렉트 폼 처리")
         
         # 리다이렉트 폼 감지
         soup = BeautifulSoup(html, 'html.parser')
@@ -328,7 +339,8 @@ class StudentCardFetcher:
         csrf_input = form.find('input', {'name': '_csrf'})
         csrf = csrf_input.get('value') if csrf_input else self.csrf_token
         
-        logger.debug(f"Redirect URL: {action}")
+        if self.verbose:
+            log_info("Redirect URL", action)
         
         # 폼 제출
         form_data = {'_csrf': csrf}
@@ -347,17 +359,19 @@ class StudentCardFetcher:
                 timeout=15
             )
             
-            logger.debug(f"<<< Response <<<\n  Status Code: {response.status_code}\n  Final URL: {response.url}")
+            if self.verbose:
+                log_response(response, show_body=False)
             
             return response.text
             
         except requests.RequestException as e:
-            logger.error(f"리다이렉트 폼 처리 실패: {e}")
+            log_error(f"리다이렉트 폼 처리 실패: {e}")
             return None
     
     def _parse_student_info(self, html: str) -> Optional[StudentInfo]:
         """학생 정보 HTML 파싱"""
-        logger.info("[Step 5] 학생 정보 파싱")
+        if self.verbose:
+            log_step("5", "학생 정보 파싱")
         
         soup = BeautifulSoup(html, 'html.parser')
         info = StudentInfo()
@@ -465,16 +479,18 @@ class StudentCardFetcher:
         
         # 필수 정보 확인
         if not info.student_id:
-            logger.error("학생 정보를 찾을 수 없습니다.")
+            log_error("학생 정보를 찾을 수 없습니다.")
             return None
         
-        logger.info("✓ 학생 정보 파싱 완료")
+        if self.verbose:
+            log_success("학생 정보 파싱 완료")
         
         return info
     
     def fetch(self) -> Optional[StudentInfo]:
         """학생카드 정보 조회"""
-        logger.info(f"\n{'='*70}\n 학생카드 정보 조회\n{'='*70}\n")
+        if self.verbose:
+            log_section("학생카드 정보 조회")
         
         # Step 1: CSRF 토큰 추출
         if not self._get_csrf_token():
@@ -487,7 +503,8 @@ class StudentCardFetcher:
         
         # Step 3: 비밀번호 인증 필요 여부 확인
         if self._check_password_required(html):
-            logger.warning("비밀번호 인증이 필요합니다.")
+            if self.verbose:
+                log_warning("비밀번호 인증이 필요합니다.")
             
             # 비밀번호 제출
             html = self._submit_password(html)
@@ -501,7 +518,7 @@ class StudentCardFetcher:
             
             # 여전히 비밀번호 인증 필요하면 실패
             if self._check_password_required(html):
-                logger.error("비밀번호 인증에 실패했습니다.")
+                log_error("비밀번호 인증에 실패했습니다.")
                 return None
         
         # Step 5: 학생 정보 파싱
