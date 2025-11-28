@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<!-- saved from url=(0146)https://sso.mju.ac.kr/sso/auth?response_type=code&client_id=lms&state=Random%20String&redirect_uri=https://lms.mju.ac.kr/ilos/sso/sso_response.jsp -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <title>명지대학교 통합로그인</title>
+        
+        <link rel="apple-touch-icon" sizes="180x180" href="https://sso.mju.ac.kr/custom/img/apple-touch-icon.png;jsessionid=6AF45DE39AAA42BB85D762A01EEEDD6C">
+		<link rel="icon" type="image/png" sizes="32x32" href="https://sso.mju.ac.kr/custom/img/favicon-32x32.png;jsessionid=6AF45DE39AAA42BB85D762A01EEEDD6C">
+		<link rel="icon" type="image/png" sizes="16x16" href="https://sso.mju.ac.kr/custom/img/favicon-16x16.png;jsessionid=6AF45DE39AAA42BB85D762A01EEEDD6C">
+		
+        <link rel="stylesheet" href="./명지대학교 통합로그인_files/login.css">
+        <link rel="stylesheet" href="./명지대학교 통합로그인_files/modal.css">
+        
+        <script src="./명지대학교 통합로그인_files/jquery.min.js.다운로드"></script>
+
+		<script src="./명지대학교 통합로그인_files/jquery.cookie.js.다운로드"></script>
+	    <script src="./명지대학교 통합로그인_files/remember.me.js.다운로드"></script>
+	    <script src="./명지대학교 통합로그인_files/forge.min.js.다운로드"></script>
+	    <script src="./명지대학교 통합로그인_files/bandi.lib.common.js.다운로드"></script>
+	    <script src="./명지대학교 통합로그인_files/jquery.cookie.js.다운로드"></script>
+	    <script src="./명지대학교 통합로그인_files/twofact.form.js.다운로드"></script>
+	    <script src="./명지대학교 통합로그인_files/sign.form.js.다운로드"></script>
+	    <script src="./명지대학교 통합로그인_files/find.form.js.다운로드"></script>
+	    <script src="./명지대학교 통합로그인_files/password.change.delay.js.다운로드"></script>
+    	<script src="./명지대학교 통합로그인_files/password.change.form.js.다운로드"></script>
+    	
+        <script src="./명지대학교 통합로그인_files/index.js.다운로드"></script>
+    <script type="text/javascript">
+	    /*<![CDATA[*/
+	    window.onload = function() {
+	        var errorMsg = null;
+	        var paramErrorMsg = null;
+	        if(!errorMsg && paramErrorMsg) {
+	            errorMsg = paramErrorMsg[0];
+	        }
+	        if(errorMsg) {
+	            var currentUri = "\/sso\/auth";
+	            errorMsg = errorMsg.replace("\\n","\n");
+	            console.log(null);
+	            alert(errorMsg); location.href=currentUri+'?cm_cg_id='+null;
+	        };
+	    }
+	    
+	    function cancle(m) {
+	    	if(m) {
+	    		if(!confirm('화면이 이동되면 인증 과정을 반복해야 합니다. 이동하시겠습니까?')) {
+	    			return;
+	    		}
+	    	}
+	    	
+	    	var cancleUrl = '/sso/auth'+'?cm_cg_id='+null;
+	    	
+	    	if(document.referrer != null && document.referrer != undefined && document.referrer != "") {
+	    		const ssoUrl = window.location.origin;
+		    	const referrerUrl = getReferrerHost();
+		    	
+		    	if(ssoUrl != referrerUrl) {
+		    		window.history.back();
+		    		return;
+		    	}
+	    	}
+	    	
+	    	location.href=cancleUrl;
+	    }
+
+	    function getReferrerHost() {
+	    	const referrer = document.referrer;
+	    	const rUrl = new URL(referrer);
+	    	return rUrl.origin;
+	    }
+	    /*]]>*/
+	</script></head>
+    
+    
+
+<body cz-shortcut-listen="true">
+<div id="wrap" class="bg">
+    <div class="login_box">
+    	<div class="login_top">
+	    	<a href="https://sso.mju.ac.kr/sso/auth?response_type=code&amp;client_id=lms&amp;state=Random%20String&amp;redirect_uri=https://lms.mju.ac.kr/ilos/sso/sso_response.jsp#n" class="logo">
+	            <img src="./명지대학교 통합로그인_files/img-logo.jpg" alt="명지대학교 로고이미지">
+	        </a>
+	        <h3>통합로그인(SSO)<br>Integrated Login</h3>
+        </div>
+        <ul class="login_lan">
+            <li><a href="https://sso.mju.ac.kr/sso/auth?response_type=code&amp;client_id=lms&amp;state=Random%20String&amp;redirect_uri=https://lms.mju.ac.kr/ilos/sso/sso_response.jsp#login_kr" class="on">KR</a></li>
+            <li><a href="https://sso.mju.ac.kr/sso/auth?response_type=code&amp;client_id=lms&amp;state=Random%20String&amp;redirect_uri=https://lms.mju.ac.kr/ilos/sso/sso_response.jsp#login_en">EN</a></li>
+        </ul>
+        <form id="signin-form" action="https://sso.mju.ac.kr/sso/auth;jsessionid=6AF45DE39AAA42BB85D762A01EEEDD6C?response_type=code&amp;client_id=lms&amp;state=Random%20String&amp;redirect_uri=https://lms.mju.ac.kr/ilos/sso/sso_response.jsp&amp;cm_cg_id=6AF45DE39AAA42BB85D762A01EEEDD6C" method="POST">
+            <input type="hidden" value="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiLpIB1g9KmkaslpEvZ89iClfGpznC+IavVT7a0/H1LrLBZRpMWCwWW2YLj+gsPKnQvq3ZYYCn6AJ3mjz6/Y2JtvYbEt4rn1eT5nqMA58KTEgxjOaK4nrVNQ7OPYS4dlOaVJOu77JLizcOzRD61aiPgkqvJANsSV2tWJ82afLeX/6vmiuUd5wczB9XFhhgyfYAmExAQMmubgjmoIPXrF0wYpxbQYrXjzGBuSkv9jbs1kHLPWEXVtxE7IbJtLRoBDqbNyELzL8u43gBL3ncjY5P0hV9SeLvbJAcZTRGPHYHePiaayplHiLn9HdoBHYE3rxa6D+n1QESEhVCTFbGVrdEQIDAQAB" id="public-key">
+            <input type="hidden" name="encsymka" id="input-encsymka">
+            <input type="hidden" name="c_r_t" value="j7VO77Aehm8aP0Bqh1M8jNvmZn2osVAykPZMkBGXggY" id="c_r_t" class="form-control">
+
+            <div id="login_kr" class="login_con active">
+                <div class="id_pw_wrap">
+                    <div class="input_box">
+                        <input type="text" id="input-userId" name="user_id" placeholder="아이디" title="아이디" maxlength="30" required="" autofocus="">
+                        <input type="password" id="input-password" name="pw" placeholder="비밀번호" title="비밀번호">
+                        <input type="hidden" name="user_id_enc" id="input-userId-enc">
+                        <input type="hidden" name="pw_enc" id="input-password-enc">
+                    </div>
+                    <button type="submit" class="login_bt">로그인</button>
+                </div>
+                <div class="keepid_box">
+                    <input type="checkbox" id="remember-me" title="아이디 저장">
+                    <label for="remember-me">아이디 저장</label>
+                </div>
+                <ul class="set_id">
+                    <li><a href="https://sso.mju.ac.kr/mju/find/id;jsessionid=6AF45DE39AAA42BB85D762A01EEEDD6C?cm_cg_id=6AF45DE39AAA42BB85D762A01EEEDD6C" title="아이디 찾기">아이디 찾기</a></li>
+                    <li><a href="https://sso.mju.ac.kr/mju/find/password;jsessionid=6AF45DE39AAA42BB85D762A01EEEDD6C?cm_cg_id=6AF45DE39AAA42BB85D762A01EEEDD6C" title="비밀번호 찾기">비밀번호 변경</a></li>
+                </ul>
+                <div class="notice dot_list">
+                	<div class="div_flex">
+	                	<h4 class="info">이용안내</h4>
+	                	<h4 class="pdf_guide" style="cursor: pointer;">2차인증 시행안내(교직원)</h4>
+                	</div>
+                	<ul>
+                		<li>최초 사용자는 주민등록 기재된 생년월일 6자리 입력 후 본인인증 절차를 거쳐 비밀번호를 변경해야 함</li>
+                		<li>아이디 : 학번/교번</li>
+                		<li>2012.07.10 이전 임용 교직원은 email ID를 통합로그인 ID로 사용하며, 교직원 번호로 로그인할 수 없습니다.</li>
+                	</ul>
+                </div>
+            </div>
+        </form>
+        <ul class="service">
+            <li><a href="https://www.mju.ac.kr/mjukr/145/subview..do" target="_blank">개인정보처리방침</a></li>
+            <li><a href="https://as82.kr/mju" target="_blank">원격지원</a></li>
+        </ul>
+    </div>
+</div>
+
+    <!-- PDF 안내 모달 -->
+	<dialog id="pdfGuideDialog" aria-labelledby="pdfGuideTitle" tabindex="-1">
+	    <div class="pdf-guide-header">
+	        <h5 id="pdfGuideTitle">2차인증 사용자 안내문</h5>
+	        <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
+	            <div class="zoom-controls" aria-label="배율 조절">
+	                <button id="zoomOutBtn" type="button" title="축소">-</button>
+	                <span id="zoomDisplay">80%</span>
+	                <button id="zoomInBtn" type="button" title="확대">+</button>
+	            </div>
+	            <button id="pdfDownloadBtn" type="button" title="PDF 다운로드">다운로드</button>
+	            <button id="pdfGuideClose" type="button">닫기</button>
+	        </div>
+	    </div>
+	    <div id="pdfGuideContainer" aria-live="polite">
+	        <p style="font-size:13px;color:#555;">불러오기 전입니다.</p>
+	    </div>
+	</dialog>
+	
+	<link rel="stylesheet" href="./명지대학교 통합로그인_files/pdf-guide.css">
+	<script src="./명지대학교 통합로그인_files/pdf.min.js.다운로드" referrerpolicy="no-referrer"></script>
+	<script src="./명지대학교 통합로그인_files/pdf.init.js.다운로드"></script>
+	<script src="./명지대학교 통합로그인_files/pdf-guide.js.다운로드"></script>
+
+
+
+</body></html>

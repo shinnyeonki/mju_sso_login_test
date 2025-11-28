@@ -1,0 +1,117 @@
+$(document).ready(function() {
+	$('input:checkbox[name="div_group"]').click(function(){
+  		if($(this).prop('checked')){
+			$('input:checkbox[name="div_group"]').prop('checked',false);
+			$(this).prop('checked',true);
+		}
+	});
+	
+	$('#find-id-form').submit(function(event) { 
+		
+		// prevent multi click
+		try{
+			var $submitBtn = $('button[type="submit"]', this);	
+			
+			if($submitBtn .length == 0) {
+				$submitBtn = $('input[type="submit"]', this);	
+			}
+			
+			$submitBtn.attr('disabled', 'disabled');
+			
+			setTimeout(function() { $submitBtn.removeAttr('disabled')}, 1000);
+		} catch(e) {}
+		
+		if(!$('input[type="checkbox"][name="div_group"]').is(":checked")) {
+			alert('신분을 선택해주시기 바랍니다.');
+			return false;
+		}
+		
+		var name = $('#input-name').val();
+	    var birthdate = $('#input-birthdate').val();
+	    
+        var publicKeyStr = $('#public-key').val();
+		
+		if( publicKeyStr && publicKeyStr.length > 10) {
+			/* 공개키가 있을 경우 처리 */
+			bandiJS.setPublicKey(publicKeyStr);
+			
+			var curTime = new Date().getTime();
+            var keyInfo = bandiJS.genKey(32);
+            var encKey = bandiJS.encryptJavaPKI(keyInfo.keyStr + ',' + curTime);
+            $("#input-encsymka").val(encKey); 
+            
+            var encName = bandiJS.encryptBase64AES(name.trim(), keyInfo);
+            var encBirthdate = bandiJS.encryptBase64AES(birthdate.trim(), keyInfo);
+            
+            $("#input-name-enc").val(encName);
+            $("#input-name").val('');
+            
+            $("#input-birthdate-enc").val(encBirthdate);
+            $("#input-birthdate").val('');
+                        
+            bandiJS.deleteKey(keyInfo);
+		}
+		
+		return true; 
+	});
+	
+	$('#find-password-form').submit(function(event) { 
+		
+		// prevent multi click
+		try{
+			var $submitBtn = $('button[type="submit"]', this);	
+			
+			if($submitBtn .length == 0) {
+				$submitBtn = $('input[type="submit"]', this);	
+			}
+			
+			$submitBtn.attr('disabled', 'disabled');
+			
+			setTimeout(function() { $submitBtn.removeAttr('disabled')}, 1000);
+		} catch(e) {}
+		
+		var nidChk = $("#nid_chk").val();
+		if(nidChk != 'Y') {
+			// alert('본인인증을 완료해주시기 바랍니다.');
+			popupNiceID();
+			return false;
+		}
+		
+		var userId = $("#input-userId").val();
+		var name = $('#input-name').val();
+	    var birthdate = $('#input-birthdate').val();
+	    
+        var publicKeyStr = $('#public-key').val();
+		
+		if( publicKeyStr && publicKeyStr.length > 10) {
+			/* 공개키가 있을 경우 처리 */
+			bandiJS.setPublicKey(publicKeyStr);
+			
+			var curTime = new Date().getTime();
+            var keyInfo = bandiJS.genKey(32);
+            var encKey = bandiJS.encryptJavaPKI(keyInfo.keyStr + ',' + curTime);
+            $("#input-encsymka").val(encKey); 
+            
+            var encUserId = bandiJS.encryptBase64AES(userId.trim(), keyInfo);
+            var encName = bandiJS.encryptBase64AES(name.trim(), keyInfo);
+            var encBirthdate = bandiJS.encryptBase64AES(birthdate.trim(), keyInfo);
+            
+            $("#input-userId-enc").val(encUserId);
+            $("#input-userId").val('');
+            
+            $("#input-name-enc").val(encName);
+            $("#input-name").val('');
+            
+            $("#input-birthdate-enc").val(encBirthdate);
+            $("#input-birthdate").val('');
+                        
+            bandiJS.deleteKey(keyInfo);
+		}
+		
+		return true; 
+	});
+});
+
+function popupNiceID() {
+	window.open('/mju/niceid/auth', 'popupChk', 'width=500, height=550, top=100, left=100, fullscreen=no, menubar=no, status=no, toolbar=no, titlebar=yes, location=no, scrollbar=no');
+}

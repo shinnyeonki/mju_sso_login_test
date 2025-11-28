@@ -1,0 +1,33 @@
+$(function(){
+
+    //로그인 탭    
+    var bdsLangCookie = $.cookie('bdsso_lang');
+    if(!bdsLangCookie) {
+		bdsLangCookie = 'ko';
+	}
+    if(bdsLangCookie != 'ko') {
+		$('.login_lan li:nth-child(1)').children('a').removeClass('on')
+		$('.login_lan li:nth-child(2)').children('a').addClass('on')
+	}
+    
+    $('#login_en').fadeOut(0);
+    $('.login_lan li').click(function(e){
+        e.preventDefault();
+        var lang = "";
+
+        if($(this).children('a').attr('href') == '#login_kr') {
+        	lang = 'ko'
+		} else {
+			lang = 'en'
+		}
+		
+		$('.login_lan li').children('a').removeClass('on');
+        $(this).children('a').addClass('on');
+		
+		$.cookie('language', lang, {path: '/'});
+		$.cookie('bdsso_lang', lang, {path: '/'});
+		
+		location.reload();
+    });
+    
+});

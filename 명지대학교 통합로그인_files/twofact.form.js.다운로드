@@ -1,0 +1,93 @@
+$(document).ready(function() {
+
+	if($("#two-factor-form").length) {
+		// openModal();
+		if($("#input-tf_val").length) {
+			$("#input-tf_val").focus();
+		}
+	}
+
+	$('#two-factor-form').submit(function(event) {
+
+		// prevent multi click
+		try{
+			var $submitBtn = $('button[type="submit"]', this);
+
+			if($submitBtn .length == 0) {
+				$submitBtn = $('input[type="submit"]', this);
+			}
+
+			$submitBtn.attr('disabled', 'disabled');
+
+			setTimeout(function() { $submitBtn.removeAttr('disabled')}, 1000);
+		} catch(e) {}
+
+		var tfVal = $('#input-tf_val').val();
+		var tidVal = $('#input-tid').val();
+
+		if(tfVal === undefined && tidVal === undefined) {
+			return true;
+		}
+
+		if(isEmptyString(tfVal) && isEmptyString(tidVal)) {
+			alert('two factor is Empty!');
+			$("#input-tf_val").val('');
+			return false;
+		}
+
+		var publicKeyStr = $('#public-key').val();
+
+		if( publicKeyStr && publicKeyStr.length > 10) {
+			/* 공개키가 있을 경우 처리 */
+			bandiJS.setPublicKey(publicKeyStr);
+
+			var keyInfo = bandiJS.genKey(32);
+			var encKey = bandiJS.encryptJavaPKI(keyInfo.keyStr);
+			$("#input-encsymka").val(encKey);
+
+			if(isEmptyString(tidVal)) {
+				var encTfVal = bandiJS.encryptBase64AES(tfVal.trim(), keyInfo, true);
+
+				$("#input-tf_val-enc").val(encTfVal);
+				$("#input-tf_val").val('');
+			} else {
+				var encTidVal = bandiJS.encryptBase64AES(tidVal.trim(), keyInfo, true);
+
+				$("#input-tid-enc").val(encTidVal);
+				$("#input-tid").val('');
+			}
+		}
+
+		return true;
+	});
+});
+
+var checkAuthResultUrl;
+var checkAuthResultInterval;
+function checkInterval(apiUrl) {
+	checkAuthResultUrl = apiUrl;
+	checkAuthResultInterval = setInterval(checkAuthResult, 3000);
+}
+
+function checkAuthResult() {
+	var frmData = $("#two-factor-form").serialize();
+	$.ajax({
+		url: checkAuthResultUrl,
+		type: 'POST',
+		data: frmData,
+		async: false,
+		success: function (result) {
+			if (result.dataMap.isSuccess){
+				clearInterval(checkAuthResultInterval);
+				$("#two-factor-form").submit();
+			}
+		},
+		error : function(response, status, error) {
+			if(response.responseJSON.error == 'NOT_LOGIN') {
+				alert('다시 시도해주시기 바랍니다.');
+				location.href='/';
+				return false;
+			}
+		}
+	});
+}
