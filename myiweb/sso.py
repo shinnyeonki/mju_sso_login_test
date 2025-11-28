@@ -17,7 +17,7 @@ from typing import Optional
 from dataclasses import dataclass
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, SoupStrainer
 
 from .utils import (
     Colors, log_section, log_step, log_info, log_success, log_error, 
@@ -104,7 +104,35 @@ class MJUSSOLogin:
         if self.verbose:
             log_step("1-2", "로그인 페이지 파싱")
         
-        soup = BeautifulSoup(html, 'html.parser')
+        # 정규표현식으로 먼저 빠르게 추출 시도
+        public_key_match = re.search(r'id=["\']public-key["\'][^>]*value=["\']([^"\']+)["\']', html)
+        if not public_key_match:
+            public_key_match = re.search(r'value=["\']([^"\']+)["\'][^>]*id=["\']public-key["\']', html)
+        
+        csrf_match = re.search(r'id=["\']c_r_t["\'][^>]*value=["\']([^"\']+)["\']', html)
+        if not csrf_match:
+            csrf_match = re.search(r'value=["\']([^"\']+)["\'][^>]*id=["\']c_r_t["\']', html)
+        
+        form_action_match = re.search(r'<form[^>]*id=["\']signin-form["\'][^>]*action=["\']([^"\']+)["\']', html)
+        if not form_action_match:
+            form_action_match = re.search(r'<form[^>]*action=["\']([^"\']+)["\'][^>]*id=["\']signin-form["\']', html)
+        
+        # 정규표현식으로 모두 찾은 경우 BeautifulSoup 스킵
+        if public_key_match and csrf_match and form_action_match:
+            self.public_key = public_key_match.group(1)
+            self.csrf_token = csrf_match.group(1)
+            self.form_action = form_action_match.group(1)
+            
+            if self.verbose:
+                log_info("Public Key", self.public_key)
+                log_info("CSRF Token", self.csrf_token)
+                log_info("Form Action", self.form_action)
+                log_success("페이지 파싱 완료 (regex)")
+            return True
+        
+        # 정규표현식 실패 시 lxml + SoupStrainer로 폴백
+        parse_only = SoupStrainer(['input', 'form'])
+        soup = BeautifulSoup(html, 'lxml', parse_only=parse_only)
         
         # 1. 공개키 추출
         public_key_input = soup.find('input', {'id': 'public-key'})
@@ -162,31 +190,43 @@ class MJUSSOLogin:
         if 'onLoad=' not in html or ('submit()' not in html and 'doLogin()' not in html):
             return None
         
-        soup = BeautifulSoup(html, 'html.parser')
-        form = soup.find('form')
-        
-        if not form:
+        # 정규표현식으로 빠르게 폼 데이터 추출 시도
+        form_action_match = re.search(r'<form[^>]*action=["\']([^"\']+)["\']', html)
+        if not form_action_match:
             return None
         
-        # 폼 액션 URL 추출
-        action = form.get('action', '')
+        action = form_action_match.group(1)
         if not action:
+            return None
+        
+        # hidden input들 추출
+        input_pattern = re.compile(r'<input[^>]*name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']|<input[^>]*value=["\']([^"\']*)["\'][^>]*name=["\']([^"\']+)["\']')
+        form_data = {}
+        for match in input_pattern.finditer(html):
+            if match.group(1):
+                form_data[match.group(1)] = match.group(2)
+            elif match.group(4):
+                form_data[match.group(4)] = match.group(3)
+        
+        if not form_data:
+            # 정규표현식 실패 시 lxml로 폴백
+            parse_only = SoupStrainer('form')
+            soup = BeautifulSoup(html, 'lxml', parse_only=parse_only)
+            form = soup.find('form')
+            if not form:
+                return None
+            for input_tag in form.find_all('input'):
+                name = input_tag.get('name')
+                value = input_tag.get('value', '')
+                if name:
+                    form_data[name] = value
+        
+        if not form_data:
             return None
         
         # 절대 URL로 변환
         from urllib.parse import urljoin
         action_url = urljoin(response.url, action)
-        
-        # 폼 데이터 추출
-        form_data = {}
-        for input_tag in form.find_all('input'):
-            name = input_tag.get('name')
-            value = input_tag.get('value', '')
-            if name:
-                form_data[name] = value
-        
-        if not form_data:
-            return None
         
         if self.verbose:
             log_step(f"3-{step+2}", f"JS 폼 자동 제출 처리")
@@ -309,8 +349,8 @@ class MJUSSOLogin:
             if self.verbose:
                 log_response(response)
             
-            # JavaScript 폼 제출 및 리다이렉트 처리 (최대 5회)
-            for i in range(5):
+            # JavaScript 폼 제출 및 리다이렉트 처리 (최대 3회 - MSI 로그인에 필요한 실제 횟수)
+            for i in range(3):
                 # JavaScript 폼 자동 제출 처리 (onLoad="doLogin()" 등)
                 form_handled = self._handle_js_form_submit(response, i)
                 if form_handled:

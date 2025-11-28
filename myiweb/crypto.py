@@ -7,16 +7,18 @@ JavaScript 원본 (bandiJS):
 - genKey(length): 세션키 생성 + PBKDF2로 AES 키 파생
 - encryptJavaPKI(data): RSA로 암호화
 - encryptBase64AES(data, keyInfo): AES로 암호화
+
+cryptography 라이브러리 사용 (OpenSSL 기반, 더 빠름)
 """
 
 import base64
-import random
+import os
 
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_v1_5, AES
-from Crypto.Util.Padding import pad
-from Crypto.Protocol.KDF import PBKDF2
-from Crypto.Hash import SHA1
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.backends import default_backend
 
 from .utils import Colors, log_info
 
@@ -40,20 +42,22 @@ def generate_session_key(length: int = 32) -> dict:
         dict: { 'keyStr': str, 'key': bytes, 'iv': bytes }
     """
     # 64바이트 랜덤 데이터를 Base64로 인코딩 (JS: forge.util.encode64(forge.random.getBytesSync(64)))
-    random_bytes = bytes(random.getrandbits(8) for _ in range(64))
+    # os.urandom이 random.getrandbits보다 빠르고 안전함
+    random_bytes = os.urandom(64)
     key_str = base64.b64encode(random_bytes).decode('utf-8')
     
     # salt = keyStr의 마지막 16자
     salt = key_str[-16:]
     
     # PBKDF2로 키 파생 (iterations=1024, dkLen=length)
-    key_bytes = PBKDF2(
-        password=key_str.encode('utf-8'),
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA1(),  # forge.pkcs5.pbkdf2 기본값은 SHA1
+        length=length,
         salt=salt.encode('utf-8'),
-        dkLen=length,
-        count=1024,
-        hmac_hash_module=SHA1  # forge.pkcs5.pbkdf2 기본값은 SHA1
+        iterations=1024,
+        backend=default_backend()
     )
+    key_bytes = kdf.derive(key_str.encode('utf-8'))
     
     # IV = 키의 마지막 16바이트
     iv_bytes = key_bytes[-16:]
@@ -84,15 +88,17 @@ def encrypt_with_rsa(data: str, public_key_str: str, verbose: bool = False) -> s
     # PEM 형식으로 변환
     pem_key = f"-----BEGIN PUBLIC KEY-----\n{public_key_str}\n-----END PUBLIC KEY-----"
     
-    # RSA 키 로드
-    rsa_key = RSA.import_key(pem_key)
+    # RSA 키 로드 (cryptography)
+    rsa_key = serialization.load_pem_public_key(pem_key.encode('utf-8'), backend=default_backend())
     
     if verbose:
-        log_info("RSA Key Size", f"{rsa_key.size_in_bits()} bits", 6)
+        log_info("RSA Key Size", f"{rsa_key.key_size} bits", 6)
     
     # PKCS1_v1_5 암호화 (Java 호환)
-    cipher = PKCS1_v1_5.new(rsa_key)
-    encrypted = cipher.encrypt(data.encode('utf-8'))
+    encrypted = rsa_key.encrypt(
+        data.encode('utf-8'),
+        padding.PKCS1v15()
+    )
     result = base64.b64encode(encrypted).decode('utf-8')
     
     if verbose:
@@ -143,10 +149,15 @@ def encrypt_with_aes(plain_text: str, key_info: dict, verbose: bool = False) -> 
     if verbose:
         log_info("Pre-encoded (Base64)", f"{input_data[:20]}...", 6)
     
-    # AES-CBC 암호화
-    cipher = AES.new(key_bytes, AES.MODE_CBC, iv_bytes)
-    padded = pad(input_data, AES.block_size)
-    encrypted = cipher.encrypt(padded)
+    # PKCS7 패딩 적용
+    block_size = 16  # AES block size
+    padding_len = block_size - (len(input_data) % block_size)
+    padded = input_data + bytes([padding_len] * padding_len)
+    
+    # AES-CBC 암호화 (cryptography)
+    cipher = Cipher(algorithms.AES(key_bytes), modes.CBC(iv_bytes), backend=default_backend())
+    encryptor = cipher.encryptor()
+    encrypted = encryptor.update(padded) + encryptor.finalize()
     
     result = base64.b64encode(encrypted).decode('utf-8')
     

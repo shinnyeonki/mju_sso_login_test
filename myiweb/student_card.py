@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, SoupStrainer
 
 from .utils import (
     Colors, log_section, log_step, log_info, log_success, log_error, 
@@ -317,27 +317,40 @@ class StudentCardFetcher:
         if self.verbose:
             log_step("4", "리다이렉트 폼 처리")
         
-        # 리다이렉트 폼 감지
-        soup = BeautifulSoup(html, 'html.parser')
-        form = soup.find('form')
-        
-        if not form:
-            return html
-        
-        # action URL 추출 (JavaScript에서 설정될 수도 있음)
-        action = form.get('action', '')
-        
-        # JavaScript에서 action을 설정하는 경우
+        # 정규표현식으로 빠르게 추출 시도
         action_match = re.search(r'frm\.action\s*=\s*["\']([^"\']+)["\']', html)
-        if action_match:
-            action = action_match.group(1)
+        if not action_match:
+            action_match = re.search(r'<form[^>]*action=["\']([^"\']+)["\']', html)
+        
+        csrf_match = re.search(r'name=["\']_csrf["\'][^>]*value=["\']([^"\']+)["\']', html)
+        if not csrf_match:
+            csrf_match = re.search(r'value=["\']([^"\']+)["\'][^>]*name=["\']_csrf["\']', html)
+        
+        action = action_match.group(1) if action_match else ''
         
         if not action or 'Sum00Svl01getStdCard' not in action:
             return html
         
-        # CSRF 토큰 추출 (새로 발급된 것 사용)
-        csrf_input = form.find('input', {'name': '_csrf'})
-        csrf = csrf_input.get('value') if csrf_input else self.csrf_token
+        csrf = csrf_match.group(1) if csrf_match else self.csrf_token
+        
+        # 정규표현식으로 못 찾은 경우 lxml로 폴백
+        if not action_match or not csrf_match:
+            parse_only = SoupStrainer('form')
+            soup = BeautifulSoup(html, 'lxml', parse_only=parse_only)
+            form = soup.find('form')
+        
+            if form:
+                if not action:
+                    action = form.get('action', '')
+                    action_js = re.search(r'frm\.action\s*=\s*["\']([^"\']+)["\']', html)
+                    if action_js:
+                        action = action_js.group(1)
+                if not csrf_match:
+                    csrf_input = form.find('input', {'name': '_csrf'})
+                    csrf = csrf_input.get('value') if csrf_input else self.csrf_token
+            
+            if not action or 'Sum00Svl01getStdCard' not in action:
+                return html
         
         if self.verbose:
             log_info("Redirect URL", action)
@@ -373,7 +386,9 @@ class StudentCardFetcher:
         if self.verbose:
             log_step("5", "학생 정보 파싱")
         
-        soup = BeautifulSoup(html, 'html.parser')
+        # 필요한 태그만 파싱 (img, div, input)
+        parse_only = SoupStrainer(['img', 'div', 'input'])
+        soup = BeautifulSoup(html, 'lxml', parse_only=parse_only)
         info = StudentInfo()
         
         # 사진 추출
