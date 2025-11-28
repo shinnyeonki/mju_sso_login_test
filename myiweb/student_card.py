@@ -1,3 +1,4 @@
+
 """
 학생카드 정보 조회 모듈
 =======================
@@ -63,6 +64,31 @@ class StudentCard:
     # 원본 데이터 (딕셔너리)
     raw_data: Dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def fetch(cls, user_id: str, user_pw: str, verbose: bool = False) -> StudentCard:
+        """
+        SSO 로그인부터 학생카드 정보 조회까지 모든 과정을 수행합니다.
+
+        Args:
+            user_id: 학번
+            user_pw: 비밀번호
+            verbose: 상세 로그 출력 여부
+
+        Returns:
+            조회된 학생카드 정보 객체
+        """
+        # 순환 참조 방지를 위해 메서드 내에서 임포트
+        from .sso import MJUSSOLogin
+
+        if verbose:
+            log_section("myiweb 통합 실행: 학생카드")
+
+        sso = MJUSSOLogin(user_id, user_pw, verbose=verbose)
+        session = sso.login(service='msi')
+
+        fetcher = _StudentCardFetcher(session, user_pw, verbose=verbose)
+        return fetcher.fetch()
+
     def to_dict(self) -> Dict[str, Any]:
         """데이터 클래스를 명시적인 딕셔너리로 변환합니다."""
         return {
@@ -116,8 +142,8 @@ class StudentCard:
             log_info("사진 데이터", f"Base64 ({len(self.photo_base64)} chars)")
 
 
-class StudentCardService(BaseFetcher):
-    """학생카드 정보 조회 서비스"""
+class _StudentCardFetcher(BaseFetcher):
+    """학생카드 정보 조회 서비스 (내부용)"""
     
     STUDENT_CARD_URL = "https://msi.mju.ac.kr/servlet/su/sum/Sum00Svl01getStdCard"
     PASSWORD_VERIFY_URL = "https://msi.mju.ac.kr/servlet/sys/sys15/Sys15Svl01verifyPW"
@@ -128,7 +154,7 @@ class StudentCardService(BaseFetcher):
     def fetch(self) -> StudentCard:
         """학생카드 정보를 조회합니다."""
         if self.verbose:
-            log_section("학생카드 정보 조회")
+            log_step("A", "학생카드 정보 조회 시작")
         
         # 1. CSRF 토큰 추출 (from BaseFetcher)
         self._get_csrf_token()
@@ -155,6 +181,7 @@ class StudentCardService(BaseFetcher):
         info = self._parse_info(html)
         
         if self.verbose:
+            log_success("학생카드 정보 조회 완료")
             info.print_summary()
             
         return info
@@ -162,7 +189,7 @@ class StudentCardService(BaseFetcher):
     def _access_student_card_page(self) -> str:
         """sideform 방식으로 학생카드 페이지 접근"""
         if self.verbose:
-            log_step("C-1", "학생카드 페이지 접근")
+            log_step("A-2", "학생카드 페이지 접근")
         
         form_data = {
             'sysdiv': 'SCH',
@@ -204,7 +231,7 @@ class StudentCardService(BaseFetcher):
     def _submit_password(self, html: str) -> str:
         """비밀번호를 제출하여 2차 인증을 수행합니다."""
         if self.verbose:
-            log_step("C-2", "2차 비밀번호 인증")
+            log_step("A-3", "2차 비밀번호 인증")
         
         original_match = re.search(r'name="originalurl"\s+value="([^"]+)"', html)
         original_url = original_match.group(1) if original_match else self.STUDENT_CARD_URL
@@ -234,7 +261,7 @@ class StudentCardService(BaseFetcher):
                 timeout=15
             )
             if self.verbose:
-                log_response(response, show_body=False)
+                log_response(response, show_body=True)
             self._last_url = response.url
             return response.text
         except requests.RequestException as e:
@@ -243,24 +270,23 @@ class StudentCardService(BaseFetcher):
     def _handle_redirect_form(self, html: str) -> str:
         """2차 인증 후 나타나는 JS 리다이렉트 폼을 처리합니다."""
         if self.verbose:
-            log_step("C-3", "리다이렉트 폼 처리")
-        
-        action_match = re.search(r'frm\.action\s*=\s*["\']([^"\\]+)["\']', html)
-        if not action_match:
-            action_match = re.search(r'<form[^>]*action=["\']([^"\\]+)["\']', html)
-        
-        csrf_match = re.search(r'name=["\']_csrf["\'][^>]*value=["\']([^"\\]+)["\']', html)
-        if not csrf_match:
-            csrf_match = re.search(r'value=["\']([^"\\]+)["\'][^>]*name=["\']_csrf["\']', html)
-        
+            log_step("A-4", "리다이렉트 폼 처리")
+
+        # 더 간단하고 정확한 정규표현식으로 수정
+        action_match = re.search(r'action\s*=\s*["\"](https[^"\"]+)["\"]', html)
+        csrf_match = re.search(r'name=["\"]_csrf["\"][^>]*value=["\"]([^"]+)["\"]', html)
+
         action = action_match.group(1) if action_match else ''
         if not action or 'Sum00Svl01getStdCard' not in action:
+            if self.verbose:
+                log_warning("리다이렉트 폼을 찾지 못했습니다. 현재 HTML을 그대로 반환합니다.")
             return html
         
         csrf = csrf_match.group(1) if csrf_match else self.csrf_token
         
         if self.verbose:
             log_info("Redirect URL", action)
+            log_info("CSRF Token", csrf)
         
         form_data = {'_csrf': csrf}
         headers = {
@@ -281,7 +307,7 @@ class StudentCardService(BaseFetcher):
     def _parse_info(self, html: str) -> StudentCard:
         """학생 정보 HTML을 파싱합니다."""
         if self.verbose:
-            log_step("C-4", "학생 정보 파싱")
+            log_step("A-5", "학생 정보 파싱")
         
         parse_only = SoupStrainer(['img', 'div', 'input'])
         soup = BeautifulSoup(html, 'lxml', parse_only=parse_only)

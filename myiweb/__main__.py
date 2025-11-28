@@ -8,8 +8,9 @@ import os
 import json
 from dotenv import load_dotenv
 
-# 새로운 API 임포트
-from .client import Client
+# 단순화된 API 임포트
+from .student_card import StudentCard
+from .student_changelog import StudentChangeLog
 from .exceptions import MyIWebError
 from .utils import Colors, log_section, log_success, log_error
 
@@ -45,24 +46,18 @@ def main():
         return
     
     try:
-        # 1. 새로운 Client API를 사용하여 클라이언트 생성 (로그인 수행)
-        client = Client(user_id, user_pw, verbose=False)
-        log_success("SSO 로그인 성공!")
-
-        # 2. 학생카드 정보 조회
+        # 1. 학생카드 정보 조회 (로그인부터 모든 과정 포함)
         log_section("학생카드 정보 조회")
-        student_card_service = client.student_card()
-        student_card = student_card_service.fetch()
+        student_card = StudentCard.fetch(user_id, user_pw, verbose=False)
         log_success("학생카드 정보 조회 완료!")
         
         # JSON 형태로 출력
         print(f"\n{Colors.BOLD}[학생카드 JSON]{Colors.END}")
         print(json.dumps(student_card.to_dict(), ensure_ascii=False, indent=2))
 
-        # 3. 학적변동내역 정보 조회
+        # 2. 학적변동내역 정보 조회
         log_section("학적변동내역 조회")
-        change_log_service = client.student_change_log()
-        change_log = change_log_service.fetch()
+        change_log = StudentChangeLog.fetch(user_id, user_pw, verbose=False)
         log_success("학적변동내역 조회 완료!")
 
         # JSON 형태로 출력

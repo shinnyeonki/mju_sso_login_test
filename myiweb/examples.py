@@ -16,10 +16,10 @@ from dotenv import load_dotenv
 # 모듈 경로 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from myiweb import Client, MyIWebError
+from myiweb import StudentCard, StudentChangeLog, MyIWebError
 from myiweb.sso import MJUSSOLogin
-from myiweb.student_card import StudentCardService
-from myiweb.student_changelog import StudentChangeLogService
+# 내부용으로 변경된 Fetcher를 임포트하여 저수준 API 예제에서 사용
+from myiweb.student_card import _StudentCardFetcher
 from myiweb.utils import log_info, log_success, log_error
 
 
@@ -39,21 +39,16 @@ def example_high_level():
         return
     
     try:
-        # 1. 클라이언트 생성 시점에 바로 SSO 로그인이 수행됩니다.
-        log_info("API Call", "Client(user_id, user_pw) 호출...")
-        client = Client(user_id, user_pw, verbose=False)
-        log_success("클라이언트 생성 및 SSO 로그인 성공!")
-        
-        # 2. 학생카드 정보 조회
-        log_info("Service", "client.student_card().fetch() 호출...")
-        student_card = client.student_card().fetch()
+        # 1. 학생카드 정보 조회 (로그인부터 모든 과정 포함)
+        log_info("API Call", "StudentCard.fetch(user_id, user_pw) 호출...")
+        student_card = StudentCard.fetch(user_id, user_pw, verbose=False)
         log_success("학생카드 정보 조회 성공!")
         print("\n--- 학생카드 JSON 출력 ---")
         print(json.dumps(student_card.to_dict(), ensure_ascii=False, indent=2))
         
-        # 3. 학적변동내역 정보 조회
-        log_info("Service", "client.student_change_log().fetch() 호출...")
-        change_log = client.student_change_log().fetch()
+        # 2. 학적변동내역 정보 조회
+        log_info("API Call", "StudentChangeLog.fetch(user_id, user_pw) 호출...")
+        change_log = StudentChangeLog.fetch(user_id, user_pw, verbose=False)
         log_success("학적변동내역 정보 조회 성공!")
         print("\n--- 학적변동내역 JSON 출력 ---")
         print(json.dumps(change_log.to_dict(), ensure_ascii=False, indent=2))
@@ -85,10 +80,10 @@ def example_low_level():
         session = sso.login(service='msi')
         log_success("로그인 성공!")
         
-        # 2. 획득한 세션을 사용하여 각 Service 클래스를 직접 생성 및 호출
+        # 2. 획득한 세션을 사용하여 각 Fetcher 클래스를 직접 생성 및 호출
         log_info("Step 2", "학생카드 정보 조회 시도...")
-        card_service = StudentCardService(session, user_pw, verbose=False)
-        student_card = card_service.fetch()
+        card_fetcher = _StudentCardFetcher(session, user_pw, verbose=False)
+        student_card = card_fetcher.fetch()
         log_success("학생카드 정보 조회 성공!")
         
         # 3. 결과 출력

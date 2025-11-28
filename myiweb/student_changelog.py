@@ -26,6 +26,31 @@ class StudentChangeLog:
     completed_semesters: str = "" # 이수학기
     department: str = ""       # 학부(과)
 
+    @classmethod
+    def fetch(cls, user_id: str, user_pw: str, verbose: bool = False) -> StudentChangeLog:
+        """
+        SSO 로그인부터 학적변동내역 조회까지 모든 과정을 수행합니다.
+
+        Args:
+            user_id: 학번
+            user_pw: 비밀번호
+            verbose: 상세 로그 출력 여부
+
+        Returns:
+            조회된 학적변동내역 정보 객체
+        """
+        # 순환 참조 방지를 위해 메서드 내에서 임포트
+        from .sso import MJUSSOLogin
+
+        if verbose:
+            log_section("myiweb 통합 실행: 학적변동내역")
+
+        sso = MJUSSOLogin(user_id, user_pw, verbose=verbose)
+        session = sso.login(service='msi')
+
+        fetcher = _StudentChangeLogFetcher(session, user_pw, verbose=verbose)
+        return fetcher.fetch()
+
     def to_dict(self) -> Dict[str, Any]:
         """데이터 클래스를 명시적인 딕셔너리로 변환합니다."""
         return {
@@ -51,8 +76,8 @@ class StudentChangeLog:
         log_info("학부(과)", self.department)
 
 
-class StudentChangeLogService(BaseFetcher):
-    """학적변동내역 조회 서비스"""
+class _StudentChangeLogFetcher(BaseFetcher):
+    """학적변동내역 조회 서비스 (내부용)"""
 
     CHANGE_LOG_URL = "/servlet/su/sud/Sud00Svl03viewChangeLog"
 
@@ -64,7 +89,7 @@ class StudentChangeLogService(BaseFetcher):
             StudentChangeLog: 파싱된 학적변동내역 정보
         """
         if self.verbose:
-            log_section("학적변동내역 조회")
+            log_step("B", "학적변동내역 정보 조회 시작")
 
         # 1. CSRF 토큰 획득 (공통 로직)
         self._get_csrf_token()
@@ -76,6 +101,7 @@ class StudentChangeLogService(BaseFetcher):
         info = self._parse_info(html)
         
         if self.verbose:
+            log_success("학적변동내역 정보 조회 완료")
             info.print_summary()
 
         return info
@@ -83,7 +109,7 @@ class StudentChangeLogService(BaseFetcher):
     def _access_change_log_page(self) -> str:
         """학적변동내역 페이지에 접근하여 HTML을 반환합니다."""
         if self.verbose:
-            log_step("B-1", "학적변동내역 페이지 접근")
+            log_step("B-2", "학적변동내역 페이지 접근")
 
         full_url = f"https://msi.mju.ac.kr{self.CHANGE_LOG_URL}"
 
@@ -117,7 +143,7 @@ class StudentChangeLogService(BaseFetcher):
     def _parse_info(self, html: str) -> StudentChangeLog:
         """학적변동내역 HTML을 파싱합니다."""
         if self.verbose:
-            log_step("B-2", "학적변동내역 정보 파싱")
+            log_step("B-3", "학적변동내역 정보 파싱")
 
         parse_only = SoupStrainer('div', class_='flex-table-item')
         soup = BeautifulSoup(html, 'lxml', parse_only=parse_only)
