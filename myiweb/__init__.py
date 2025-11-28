@@ -4,16 +4,19 @@
 MSI(My iWeb) 서비스에 접속하여 학생 정보를 조회하는 모듈
 
 모듈 구성:
+- client: 메인 클라이언트 (인증 및 서비스 팩토리)
+- sso: SSO 로그인 저수준 로직
+- student_card: 학생카드 조회 서비스
+- student_changelog: 학적변동내역 조회 서비스
+- abc: 추상 기본 클래스
+- crypto: RSA/AES 암호화 유틸리티
 - exceptions: 커스텀 예외 클래스
 - utils: 로깅 및 공통 유틸리티
-- crypto: RSA/AES 암호화 유틸리티
-- sso: SSO 로그인 클래스
-- student_card: 학생카드 정보 조회
-- __main__: `python -m myiweb`을 위한 CLI 엔트리포인트
 """
 
-from .sso import MJUSSOLogin
-from .student_card import StudentCardFetcher, StudentInfo
+from .client import Client
+from .student_card import StudentCard
+from .student_changelog import StudentChangeLog
 from .exceptions import (
     MyIWebError,
     NetworkError,
@@ -23,13 +26,13 @@ from .exceptions import (
 )
 
 __all__ = [
-    # 고수준 API 클래스
-    'StudentInfo',
-    
-    # 저수준 API 클래스 (내부 로직 접근용)
-    'MJUSSOLogin',
-    'StudentCardFetcher',
-    
+    # 메인 클라이언트
+    'Client',
+
+    # 데이터 클래스
+    'StudentCard',
+    'StudentChangeLog',
+
     # 예외 클래스
     'MyIWebError',
     'NetworkError',

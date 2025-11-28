@@ -16,47 +16,11 @@ from dotenv import load_dotenv
 # 모듈 경로 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from myiweb import MJUSSOLogin, StudentCardFetcher, StudentInfo, MyIWebError
+from myiweb import Client, MyIWebError
+from myiweb.sso import MJUSSOLogin
+from myiweb.student_card import StudentCardService
+from myiweb.student_changelog import StudentChangeLogService
 from myiweb.utils import log_info, log_success, log_error
-
-
-def example_low_level():
-    """
-    저수준(Low-level) API 사용 예제
-    - 각 과정을 직접 제어해야 할 때 유용합니다.
-    """
-    print("\n=== 저수준 API 예제 ===\n")
-    load_dotenv()
-    
-    user_id = os.getenv('MJU_ID')
-    user_pw = os.getenv('MJU_PW')
-    
-    if not user_id or not user_pw:
-        log_error("Skipping low-level example: .env 파일에 MJU_ID와 MJU_PW를 설정해주세요.")
-        return
-    
-    try:
-        # 1. MSI 로그인
-        log_info("Step 1", "SSO 로그인 시도...")
-        sso = MJUSSOLogin(user_id, user_pw, verbose=False)
-        session = sso.login(service='msi')
-        log_success("로그인 성공!")
-        
-        # 2. 학생카드 정보 조회
-        log_info("Step 2", "학생카드 정보 조회 시도...")
-        fetcher = StudentCardFetcher(session, user_pw, verbose=False)
-        student_info = fetcher.fetch()
-        log_success("학생카드 정보 조회 성공!")
-        
-        # 3. 결과 출력
-        print("\n--- 학생 정보 요약 ---")
-        print(f"학번: {student_info.student_id}")
-        print(f"이름: {student_info.name_korean}")
-        print(f"학과: {student_info.department}")
-        print("----------------------\n")
-
-    except MyIWebError as e:
-        log_error(f"저수준 API 테스트 실패: {e}")
 
 
 def example_high_level():
@@ -75,20 +39,67 @@ def example_high_level():
         return
     
     try:
-        # 단 한 줄의 클래스 메서드 호출로 모든 과정을 처리합니다.
-        log_info("API Call", "StudentInfo.from_login(user_id, user_pw) 호출...")
-        info = StudentInfo.from_login(user_id, user_pw, verbose=False)
-        log_success("고수준 API 호출 성공!")
+        # 1. 클라이언트 생성 시점에 바로 SSO 로그인이 수행됩니다.
+        log_info("API Call", "Client(user_id, user_pw) 호출...")
+        client = Client(user_id, user_pw, verbose=False)
+        log_success("클라이언트 생성 및 SSO 로그인 성공!")
         
-        # 결과를 딕셔너리로 변환하여 JSON으로 출력
-        data = info.to_dict()
+        # 2. 학생카드 정보 조회
+        log_info("Service", "client.student_card().fetch() 호출...")
+        student_card = client.student_card().fetch()
+        log_success("학생카드 정보 조회 성공!")
+        print("\n--- 학생카드 JSON 출력 ---")
+        print(json.dumps(student_card.to_dict(), ensure_ascii=False, indent=2))
         
-        print("\n--- JSON 출력 ---")
-        print(json.dumps(data, ensure_ascii=False, indent=2))
-        print("-------------------\n")
+        # 3. 학적변동내역 정보 조회
+        log_info("Service", "client.student_change_log().fetch() 호출...")
+        change_log = client.student_change_log().fetch()
+        log_success("학적변동내역 정보 조회 성공!")
+        print("\n--- 학적변동내역 JSON 출력 ---")
+        print(json.dumps(change_log.to_dict(), ensure_ascii=False, indent=2))
+        print("---------------------------\n")
 
     except MyIWebError as e:
         log_error(f"고수준 API 테스트 실패: {e}")
+
+
+def example_low_level():
+    """
+    저수준(Low-level) API 사용 예제
+    - 각 과정을 직접 제어해야 할 때 유용합니다.
+    """
+    print("\n=== 저수준 API 예제 ===\n")
+    load_dotenv()
+    
+    user_id = os.getenv('MJU_ID')
+    user_pw = os.getenv('MJU_PW')
+    
+    if not user_id or not user_pw:
+        log_error("Skipping low-level example: .env 파일에 MJU_ID와 MJU_PW를 설정해주세요.")
+        return
+    
+    try:
+        # 1. MSI 로그인하여 세션 획득
+        log_info("Step 1", "SSO 로그인 시도...")
+        sso = MJUSSOLogin(user_id, user_pw, verbose=False)
+        session = sso.login(service='msi')
+        log_success("로그인 성공!")
+        
+        # 2. 획득한 세션을 사용하여 각 Service 클래스를 직접 생성 및 호출
+        log_info("Step 2", "학생카드 정보 조회 시도...")
+        card_service = StudentCardService(session, user_pw, verbose=False)
+        student_card = card_service.fetch()
+        log_success("학생카드 정보 조회 성공!")
+        
+        # 3. 결과 출력
+        print("\n--- 학생 정보 요약 ---")
+        print(f"학번: {student_card.student_id}")
+        print(f"이름: {student_card.name_korean}")
+        print(f"학과: {student_card.department}")
+        print("----------------------\n")
+
+    except MyIWebError as e:
+        log_error(f"저수준 API 테스트 실패: {e}")
 
 
 def example_services():

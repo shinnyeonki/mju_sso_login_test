@@ -8,7 +8,8 @@ import os
 import json
 from dotenv import load_dotenv
 
-from .student_card import StudentInfo
+# 새로운 API 임포트
+from .client import Client
 from .exceptions import MyIWebError
 from .utils import Colors, log_section, log_success, log_error
 
@@ -25,14 +26,12 @@ def main():
     banner = (
         f"\n{Colors.BOLD}{Colors.HEADER}\n"
         "╔══════════════════════════════════════════════════════════════════════╗\n"
-        "║                명지대학교 학생카드 정보 조회 프로그램                        ║\n"
+        "║           명지대학교 MyiWeb 정보 조회 프로그램 (myiweb)                  ║\n"
         "║                                                                      ║\n"
-        "║  이 프로그램은 MSI에 로그인하여 학생 정보를 조회합니다.                        ║\n"
-        "║  - Step 1: SSO 로그인 (RSA + AES-256 암호화, PBKDF2 키 파생)             ║\n"
-        "║  - Step 2: MSI 세션 설정 (JavaScript 폼 자동 제출)                        ║\n"
-        "║  - Step 3: 학생카드 페이지 접속 (sideform POST)                          ║\n"
-        "║  - Step 4: 비밀번호 재인증                                               ║\n"
-        "║  - Step 5: 학생 정보 파싱                                                ║\n"
+        "║  이 프로그램은 MyiWeb에 로그인하여 학생 정보를 조회합니다.                 ║\n"
+        "║  - 지원 기능: 학생카드, 학적변동내역                                     ║\n"
+        "║                                                                      ║\n"
+        "║  https://github.com/shinnk/mju-sso-login                             ║\n"
         "╚══════════════════════════════════════════════════════════════════════╝\n"
         f"{Colors.END}\n"
     )
@@ -46,15 +45,30 @@ def main():
         return
     
     try:
-        # 새로운 고수준 API 사용
-        student_info = StudentInfo.from_login(user_id, user_pw, verbose=True)
-        
-        log_section("최종 결과")
-        log_success("학생 정보 조회 완료!")
+        # 1. 새로운 Client API를 사용하여 클라이언트 생성 (로그인 수행)
+        client = Client(user_id, user_pw, verbose=False)
+        log_success("SSO 로그인 성공!")
+
+        # 2. 학생카드 정보 조회
+        log_section("학생카드 정보 조회")
+        student_card_service = client.student_card()
+        student_card = student_card_service.fetch()
+        log_success("학생카드 정보 조회 완료!")
         
         # JSON 형태로 출력
-        print(f"\n{Colors.BOLD}[JSON 출력]{Colors.END}")
-        print(json.dumps(student_info.to_dict(), ensure_ascii=False, indent=2))
+        print(f"\n{Colors.BOLD}[학생카드 JSON]{Colors.END}")
+        print(json.dumps(student_card.to_dict(), ensure_ascii=False, indent=2))
+
+        # 3. 학적변동내역 정보 조회
+        log_section("학적변동내역 조회")
+        change_log_service = client.student_change_log()
+        change_log = change_log_service.fetch()
+        log_success("학적변동내역 조회 완료!")
+
+        # JSON 형태로 출력
+        print(f"\n{Colors.BOLD}[학적변동내역 JSON]{Colors.END}")
+        print(json.dumps(change_log.to_dict(), ensure_ascii=False, indent=2))
+        
         
     except MyIWebError as e:
         log_section("실패")
